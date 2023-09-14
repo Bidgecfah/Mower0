@@ -48,6 +48,7 @@ warnings.warn = warn
 from paddleocr import PaddleOCR
 from arknights_mower.strategy import Solver
 
+源码日志 = '否'
 ocr = None
 任务提示 = str()
 下个任务开始时间 = datetime.now()
@@ -70,7 +71,7 @@ if 用户配置['悬浮字幕开关'] == '开':   悬浮字幕开关 = True
 窗口 = Tk()
 窗口宽度 = 窗口.winfo_screenwidth()
 窗口高度 = 窗口.winfo_screenheight()
-字幕字号 = int(窗口.winfo_screenheight() / 22)
+字幕字号 = 窗口.winfo_screenheight() // 22
 if 用户配置['字幕字号'] != '默认':
     字幕字号 = int(用户配置['字幕字号'])
 字幕颜色 = 用户配置['字幕颜色']
@@ -234,7 +235,7 @@ def 日志设置():
     config.SCREENSHOT_MAXNUM = 用户配置['每种截图的最大保存数量'] - 1
     config.MAX_RETRYTIME = 10
     日志全局格式 = '%(blue)s%(asctime)s - %(log_color)s%(funcName)s -  %(log_color)s%(message)s'
-    if 用户配置['源码日志'] == '是':
+    if 源码日志 == '是':
         日志全局格式 = '%(blue)s%(asctime)s %(white)s- %(relativepath)s:%(lineno)d - %(log_color)s%(funcName)s - %(message)s'
     for 日志格式 in logger.handlers:
         日志格式.setFormatter(colorlog.ColoredFormatter(日志全局格式, '%m-%d %H:%M:%S'))
@@ -347,7 +348,7 @@ class 项目经理(BaseSolver):
             if self.find('index_infrastructure') is not None:
                 self.tap_element('index_infrastructure')
             elif self.find('12cadpa') is not None:
-                self.device.tap((960, 540))
+                self.device.tap((self.recog.w // 2, self.recog.h // 2))
             else:
                 self.back()
             self.recog.update()
@@ -411,10 +412,11 @@ class 项目经理(BaseSolver):
             logger.info('返回基建主界面')
             unknown_count = 0
             while self.get_infra_scene() != 201 and unknown_count < 5:
+                logger.warning(f'未知界面{unknown_count}')
                 if self.find('index_infrastructure') is not None:
                     self.tap_element('index_infrastructure')
                 elif self.find('12cadpa') is not None:
-                    self.device.tap((960, 540))
+                    self.device.tap((self.recog.w // 2, self.recog.h // 2))
                 else:
                     self.back()
                 self.recog.update()
@@ -522,8 +524,8 @@ class 项目经理(BaseSolver):
                 raise Exception('未成功进入订单界面')
             self.tap((self.recog.w * 0.05, self.recog.h * 0.95), interval=1)
             error_count += 1
-        execute_time = self.double_read_time((int(self.recog.w * 650 / 2496), int(self.recog.h * 660 / 1404),
-                                              int(self.recog.w * 815 / 2496), int(self.recog.h * 710 / 1404)),
+        execute_time = self.double_read_time((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                                              self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
                                              use_digit_reader=True)
         logger.info(f'贸易站 B{room[5]}0{room[7]} 接单时间为 {execute_time.strftime("%H:%M:%S")}')
         execute_time = execute_time - timedelta(seconds=(self.跑单提前运行时间))
@@ -601,7 +603,7 @@ class 项目经理(BaseSolver):
         # 刷新图片
         self.recog.update()
         if use_digit_reader:
-            time_str = self.digit_reader.get_time(self.recog.gray)
+            time_str = self.digit_reader.get_time(self.recog.gray, self.recog.h, self.recog.w)
         else:
             time_str = self.read_screen(self.recog.img, type='time', cord=cord)
         try:
@@ -636,7 +638,7 @@ class 项目经理(BaseSolver):
             tapped = True
         factory = self.find('infra_collect_factory')
         if factory is not None:
-            logger.info('产物收取')
+            logger.info('可收获')
             self.tap(factory)
             tapped = True
         if not tapped:
@@ -686,7 +688,7 @@ class 项目经理(BaseSolver):
                 while self.get_infra_scene() == 9:
                     time.sleep(1)
                     self.recog.update()
-                self.device.tap((1320, 502))
+                self.device.tap((int(self.recog.w * 1320 / 1920), int(self.recog.h * 502 / 1080)))
                 time.sleep(1)
                 while self.get_infra_scene() == 9:
                     time.sleep(1)
@@ -700,13 +702,13 @@ class 项目经理(BaseSolver):
                         raise Exception('未成功进入订单界面')
                     self.tap((self.recog.w * 0.05, self.recog.h * 0.95), interval=1)
                     error_count += 1
-                加速后接单时间 = self.double_read_time((int(self.recog.w * 650 / 2496), int(self.recog.h * 660 / 1404),
-                                                        int(self.recog.w * 815 / 2496), int(self.recog.h * 710 / 1404)),
+                加速后接单时间 = self.double_read_time((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                                                        self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
                                                        use_digit_reader=True)
                 self.任务列表[0].time = 加速后接单时间 - timedelta(seconds=(self.跑单提前运行时间))
                 logger.info(f'房间 B{room[5]}0{room[7]} 无人机加速后接单时间为 {加速后接单时间.strftime("%H:%M:%S")}')
                 if not_customize:
-                    无人机数量 = self.digit_reader.get_drone(self.recog.gray)
+                    无人机数量 = self.digit_reader.get_drone(self.recog.gray, self.recog.h, self.recog.w)
                     logger.info(f'当前无人机数量为 {无人机数量}')
                 while self.find('bill_accelerate') is None:
                     if error_count > 5:
@@ -891,8 +893,16 @@ class 项目经理(BaseSolver):
         if length > 3: self.swipe((self.recog.w * 0.8, self.recog.h * 0.5), (0, self.recog.h * 0.45), duration=500,
                                   interval=1,
                                   rebuild=True)
-        name_p = [((1460, 155), (1700, 210)), ((1460, 370), (1700, 420)), ((1460, 585), (1700, 630)),
-                  ((1460, 560), (1700, 610)), ((1460, 775), (1700, 820))]
+        name_p = [((self.recog.w * 1460 // 1920, self.recog.h * 155 // 1080),
+                   (self.recog.w * 1700 // 1920, self.recog.h * 210 // 1080)),
+                  ((self.recog.w * 1460 // 1920, self.recog.h * 370 // 1080),
+                   (self.recog.w * 1700 // 1920, self.recog.h * 420 // 1080)),
+                  ((self.recog.w * 1460 // 1920, self.recog.h * 585 // 1080),
+                   (self.recog.w * 1700 // 1920, self.recog.h * 630 // 1080)),
+                  ((self.recog.w * 1460 // 1920, self.recog.h * 560 // 1080),
+                   (self.recog.w * 1700 // 1920, self.recog.h * 610 // 1080)),
+                  ((self.recog.w * 1460 // 1920, self.recog.h * 775 // 1080),
+                   (self.recog.w * 1700 // 1920, self.recog.h * 820 // 1080))]
         result = []
         swiped = False
         for i in range(0, length):
@@ -1025,8 +1035,8 @@ class 项目经理(BaseSolver):
                             self.tap((self.recog.w * 0.05, self.recog.h * 0.95), interval=1)
                             error_count += 1
                         修正后的接单时间 = self.double_read_time(
-                            (int(self.recog.w * 650 / 2496), int(self.recog.h * 660 / 1404),
-                             int(self.recog.w * 815 / 2496), int(self.recog.h * 710 / 1404)),
+                            (self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                             self.recog.w * 815 // 2496, self.recog.h * 710 //1404),
                             use_digit_reader=True)
                         截图等待时间 = round((修正后的接单时间 - datetime.now()).total_seconds(), 1)
                         if (截图等待时间 > 0) and (截图等待时间 < 1000):
@@ -1295,15 +1305,14 @@ def 初始化(任务列表, scheduler=None):
     config.APPNAME = 服务器
     config.TAP_TO_LAUNCH = [{"enable": "false", "x": "0", "y": "0"}]
     init_fhlr()
-    日志设置()
     device = 设备控制()
     cli = Solver(device)
     if scheduler is None:
         当前项目 = 项目经理(cli.device, cli.recog)
         logger.info(f'当前模拟器分辨率为 {当前项目.recog.w} × {当前项目.recog.h}')
-        if 当前项目.recog.w != 1920 or 当前项目.recog.h != 1080:
-            logger.error('请将模拟器分辨率设置为 1920 × 1080 再重新运行 Mower0!')
-            托盘图标.notify('请将模拟器分辨率设置为 1920 × 1080 \n再重新运行 Mower0!', "分辨率检验")
+        if 当前项目.recog.w * 9 != 当前项目.recog.h * 16:
+            logger.error('请将模拟器分辨率设置为 16:9 再重新运行 Mower0!')
+            托盘图标.notify('请将模拟器分辨率设置为 16:9 \n再重新运行 Mower0!', "分辨率检验")
             退出程序()
         当前项目.服务器 = 服务器
         当前项目.operators = {}
@@ -1354,6 +1363,7 @@ class 线程(threading.Thread):
     def Mower0(self):
         global ope_list, 当前项目, 任务提示, 下个任务开始时间, 已签到日期
         # 第一次执行任务
+        日志设置()
         任务列表 = []
         for t in 任务列表:
             t.time = datetime.strptime(str(t.time), '%m-%d %H:%M:%S.%f')
@@ -1383,7 +1393,7 @@ class 线程(threading.Thread):
                         for i in range(len(任务列表)):
                             logger.warning(
                                 f'房间 B{任务列表[i].type[5]}0{任务列表[i].type[7]} 开始跑单的时间为 {任务列表[i].time.strftime("%H:%M:%S")}')
-                        无人机数量 = 当前项目.digit_reader.get_drone(当前项目.recog.gray)
+                        无人机数量 = 当前项目.digit_reader.get_drone(当前项目.recog.gray, 当前项目.recog.h, 当前项目.recog.w)
                         if 无人机数量 > 168:
                             logger.warning(f'现在有 {无人机数量} 个无人机，请尽快使用，避免溢出！')
                             任务提示 += f'现在有 {无人机数量} 个无人机，请尽快使用！\n'
