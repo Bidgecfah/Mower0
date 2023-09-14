@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 from pathlib import Path
 import os
-from .image import loadimg
+from .image import loadimg, saveimg
 from .. import __rootdir__
 
 
@@ -22,8 +22,9 @@ class DigitReader:
                 loadimg(f'{__rootdir__}/resources/drone_count/{i}.png', True)
             )
 
-    def get_drone(self, img_grey):
-        drone_part = img_grey[32:76, 1144:1225]
+    def get_drone(self, img_grey, h, w):
+        drone_part = img_grey[h * 32 // 1080:h * 76 // 1080, w * 1144 // 1920:w * 1225 // 1920]
+        drone_part = cv.resize(drone_part, (81,44), interpolation=cv.INTER_AREA)
         result = {}
         for j in range(10):
             res = cv.matchTemplate(
@@ -45,8 +46,9 @@ class DigitReader:
         l = [str(result[k]) for k in sorted(result)]
         return int("".join(l))
 
-    def get_time(self, img_grey):
-        digit_part = img_grey[510:543, 499:1920]
+    def get_time(self, img_grey, h, w):
+        digit_part = img_grey[h * 510 // 1080:h * 543 // 1080, w * 499 // 1920:w]
+        digit_part = cv.resize(digit_part, (1421,33), interpolation=cv.INTER_AREA)
         result = {}
         for j in range(10):
             res = cv.matchTemplate(
@@ -65,7 +67,7 @@ class DigitReader:
                         break
                 if accept:
                     if len(result) == 0:
-                        digit_part = digit_part[:, loc[1][i] - 5 : loc[1][i] + 116]
+                        digit_part = digit_part[:, loc[1][i] - 5: loc[1][i] + 116]
                         offset = loc[1][0] - 5
                         for m in range(len(loc[1])):
                             loc[1][m] -= offset
