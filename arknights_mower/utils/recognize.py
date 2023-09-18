@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import cv2
+import datetime
+import numpy as np
 import time
 from typing import List, Optional
-
-import cv2
-import numpy as np
 
 from .. import __rootdir__
 from . import config, detector
@@ -23,6 +23,9 @@ class RecognizeError(Exception):
 class Recognizer(object):
 
     def __init__(self, device: Device, screencap: bytes = None) -> None:
+        self.相同场景计数 = 0
+        self.相同场景初始时刻 = datetime.datetime.now()
+        self.上次场景编号 = 0
         self.device = device
         self.start(screencap)
 
@@ -62,6 +65,16 @@ class Recognizer(object):
     def get_scene(self) -> int:
         """ get the current scene in the game """
         if self.scene != Scene.UNDEFINED:
+            if self.上次场景编号 == self.scene:
+                self.相同场景计数 += 1
+                if self.相同场景计数 > 30 and datetime.datetime.now() - self.相同场景初始时刻 > datetime.timedelta(seconds=30):
+                    logger.warning(f'相同场景计数达{self.相同场景计数}次')
+                    self.device.exit('com.hypergryph.arknights')
+                    self.device.exit('com.hypergryph.arknights.bilibili')
+                    self.相同场景计数 = 0
+            else:
+                self.上次场景编号 = self.scene
+                self.相同场景计数 = 0
             return self.scene
         if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h))) is not None:
             self.scene = Scene.CONNECTING
@@ -220,11 +233,32 @@ class Recognizer(object):
         # save screencap to analyse
         if config.SCREENSHOT_PATH is not None:
             self.save_screencap(self.scene)
-        logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+        if not (self.scene == 201 or self.scene == 202 or self.scene == 205 or self.scene == 9 or self.scene == -1):
+            logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+        if self.上次场景编号 == self.scene:
+            self.相同场景计数 += 1
+            if self.相同场景计数 > 30 and datetime.datetime.now() - self.相同场景初始时刻 > datetime.timedelta(seconds=30):
+                logger.warning(f'相同场景计数达{self.相同场景计数}次')
+                self.device.exit('com.hypergryph.arknights')
+                self.device.exit('com.hypergryph.arknights.bilibili')
+                self.相同场景计数 = 0
+        else:
+            self.上次场景编号 = self.scene
+            self.相同场景计数 = 0
         return self.scene
 
     def get_infra_scene(self)-> int:
         if self.scene != Scene.UNDEFINED:
+            if self.上次场景编号 == self.scene:
+                self.相同场景计数 += 1
+                if self.相同场景计数 > 30 and datetime.datetime.now() - self.相同场景初始时刻 > datetime.timedelta(seconds=30):
+                    logger.warning(f'相同场景计数达{self.相同场景计数}次')
+                    self.device.exit('com.hypergryph.arknights')
+                    self.device.exit('com.hypergryph.arknights.bilibili')
+                    self.相同场景计数 = 0
+            else:
+                self.上次场景编号 = self.scene
+                self.相同场景计数 = 0
             return self.scene
         if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h))) is not None:
             self.scene = Scene.CONNECTING
@@ -265,7 +299,18 @@ class Recognizer(object):
         # save screencap to analyse
         if config.SCREENSHOT_PATH is not None:
             self.save_screencap(self.scene)
-        logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+        if not (self.scene == 201 or self.scene == 202 or self.scene == 205 or self.scene == 9 or self.scene == -1):
+            logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+        if self.上次场景编号 == self.scene:
+            self.相同场景计数 += 1
+            if self.相同场景计数 > 30 and datetime.datetime.now() - self.相同场景初始时刻 > datetime.timedelta(seconds=30):
+                logger.warning(f'相同场景计数达{self.相同场景计数}次')
+                self.device.exit('com.hypergryph.arknights')
+                self.device.exit('com.hypergryph.arknights.bilibili')
+                self.相同场景计数 = 0
+        else:
+            self.上次场景编号 = self.scene
+            self.相同场景计数 = 0
         return self.scene
 
     def is_black(self) -> None:
