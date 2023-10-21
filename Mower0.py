@@ -681,10 +681,11 @@ def 森空岛实时数据分析():
 
     输出信息 = "---------------------------------------------------------------\n"
     输出信息 += (
-        f"{数据['status']['name'].split('#')[0]} 博士，向您汇报，\n"
-        f"按照森空岛的目前采集到的信息推算，罗德岛需要注意的情况如下：\n")
+        f"{数据['status']['name'].split('#')[0]} 博士，\n"
+        f"按照森空岛的目前采集到的信息推算，罗德岛需要注意的情况向您汇报如下：\n")
     输出信息 += 信息内容
     输出信息 += (
+        f"\n"
         f"森空岛本次汇报时间 {datetime.fromtimestamp(数据['currentTs']).strftime('%Y-%m-%d %H:%M')}\n"
         f"森空岛信息刷新时间 "
         f"{datetime.fromtimestamp(数据['building']['labor']['lastUpdateTime']).strftime('%Y-%m-%d %H:%M')}\n"
@@ -771,8 +772,7 @@ def 森空岛干员阵容查询():
                         消耗龙门币 += 50000
                     elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
                         消耗龙门币 += 100000
-                elif not 数据['equipmentInfoMap'][模组['id']]['typeIcon'] == 'original' and 模组['id'] == 干员[
-                    'defaultEquipId']:
+                elif not 数据['equipmentInfoMap'][模组['id']]['typeIcon'] == 'original' and 模组['id'] == 干员['defaultEquipId']:
                     模组是开的 = True
                     if 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
                         消耗龙门币 += 20000
@@ -1843,14 +1843,22 @@ class 项目经理(BaseSolver):
                                         <tr><td>{任务.time.strftime('%Y-%m-%d %H:%M:%S')}</td>
                                         <td>B{任务.type[5]}0{任务.type[7]}</td></tr>    
                                     """
-                    内容 += "</table></body></html>"
-                    内容 += _信息内容
+                    内容 += "</table></body></html>\n"
+                    # 森空岛信息
+                    if 森空岛小秘书:
+                        森空岛信息 = _信息内容.split('\n')
+                        内容 += """
+                        <html>
+                            <body>
+                            <table border="1">                  
+                        """
+                        for 行 in 森空岛信息:
+                            if len(行) > 1:  内容 += f"<tr><td>{行}</td></tr>"
+                        内容 += "</table></body></html>"
                     邮件.attach(MIMEText(内容, 'html'))
                 else:
                     邮件.attach(MIMEText(str(内容), 'plain', 'utf-8'))
-                邮件['Subject'] = ('将在 ' + self.任务列表[0].time.strftime('%H:%M:%S') +
-                                   ' 于房间 B' + self.任务列表[0].type[5] + '0' + self.任务列表[0].type[
-                                       7] + ' 进行跑单')
+                邮件['Subject'] = ('将在 ' + self.任务列表[0].time.strftime('%H:%M:%S') + ' 于房间 B' + self.任务列表[0].type[5] + '0' + self.任务列表[0].type[7] + ' 进行跑单')
                 邮件['From'] = self.邮件设置['发信邮箱']
                 邮箱 = smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10.0)
                 # 登录邮箱
