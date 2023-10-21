@@ -8,8 +8,8 @@ import hmac
 import inspect
 import json
 import os
-import pathlib
 import pystray
+import pathlib
 import requests
 import smtplib
 import sys
@@ -17,7 +17,6 @@ import threading
 import time
 import warnings
 import yaml
-from ctypes import CFUNCTYPE, c_int, c_char_p, c_void_p
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,6 +33,7 @@ from arknights_mower.utils.datetime import the_same_time
 from arknights_mower.utils.device.adb_client import ADBClient
 from arknights_mower.utils.device.minitouch import MiniTouch
 from arknights_mower.utils.device.scrcpy import Scrcpy
+from arknights_mower.utils.email import maa_template
 from arknights_mower.utils.digit_reader import DigitReader
 from arknights_mower.utils.log import init_fhlr, logger, save_screenshot
 from arknights_mower.utils.operators import Operator, Operators
@@ -41,10 +41,10 @@ from arknights_mower.utils.pipe import push_operators
 from arknights_mower.utils.scheduler_task import SchedulerTask
 from arknights_mower.utils.solver import BaseSolver
 from arknights_mower.utils.recognize import Recognizer, RecognizeError
+from ctypes import CFUNCTYPE, c_int, c_char_p, c_void_p
 
 
-def warn(*args, **kwargs):
-    pass
+def warn(*args, **kwargs):  pass
 
 
 warnings.warn = warn
@@ -55,23 +55,32 @@ from arknights_mower.strategy import Solver
 源码日志 = '否'
 ocr = None
 任务提示 = str()
+上次跑单时间 = datetime.now() - timedelta(seconds=16560)
 下个任务开始时间 = datetime.now()
 字幕 = str()
 已签到日期 = str()
+关卡掉落 = {}
 
-with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as f:
-    用户配置 = yaml.load(f.read(), Loader=yaml.FullLoader)
+with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
+    用户配置 = yaml.load(用户配置文件.read(), Loader=yaml.FullLoader)
 
 服务器 = 'com.hypergryph.arknights'
 if 用户配置['服务器'] == 'Bilibili服务器':    服务器 = 'com.hypergryph.arknights.bilibili'
-弹窗提醒开关 = False
-if 用户配置['弹窗提醒开关'] == '开':   弹窗提醒开关 = True
+弹窗提醒 = False
+if 用户配置['弹窗提醒开关'] == '开':   弹窗提醒 = True
 跑单提前运行时间 = 用户配置['跑单提前运行时间']
 更换干员前缓冲时间 = 用户配置['更换干员前缓冲时间']
 龙舌兰和但书休息 = False
 if 用户配置['龙舌兰和但书休息'] == '开':     龙舌兰和但书休息 = True
 悬浮字幕开关 = False
 if 用户配置['悬浮字幕开关'] == '开':   悬浮字幕开关 = True
+签到 = False
+if 用户配置['森空岛签到开关'] == '开':   签到 = True
+森空岛小秘书 = False
+if 用户配置['森空岛小秘书开关'] == '开':   森空岛小秘书 = True
+首次登录森空岛 = True
+characters = None
+sign_token = None
 窗口 = Tk()
 窗口宽度 = 窗口.winfo_screenwidth()
 窗口高度 = 窗口.winfo_screenheight()
@@ -245,120 +254,173 @@ def 日志设置():
         日志格式.setFormatter(colorlog.ColoredFormatter(日志全局格式, '%m-%d %H:%M:%S'))
 
 
+精英化零阶段等级所需经验 = [0, 100, 217, 351, 502, 670, 855, 1057, 1276, 1512, 1765, 2035, 2322, 2626, 2947, 3285, 3640,
+                            4012, 4401, 4807, 5230, 5670, 6127, 6601, 7092, 7600, 8125, 8667, 9226, 9800, 10389, 10994,
+                            11615, 12252, 12905, 13574, 14259, 14960, 15676, 16400, 17139, 17888, 18647, 19417, 20200,
+                            21004, 21824, 22660, 23512, 24400]
+精英化零阶段等级所需龙门币 = [0, 30, 66, 109, 159, 216, 281, 354, 435, 525, 624, 732, 850, 978, 1116, 1265, 1425, 1607,
+                              1813, 2044, 2302, 2588, 2903, 3249, 3627, 4038, 4484, 4966, 5486, 6043, 6638, 7273, 7950,
+                              8670, 9434, 10243, 11099, 12003, 12955, 13947, 14989, 16075, 17206, 18384, 19613, 20907,
+                              22260, 23673, 25147, 26719]
+精英化一阶段等级所需经验 = [0, 120, 292, 516, 792, 1120, 1500, 1932, 2416, 2952, 3540, 4180, 4872, 5616, 6412, 7260,
+                            8160, 9112, 10116, 11172, 12280, 13440, 14652, 15916, 17232, 18600, 20020, 21492, 23016,
+                            24592, 26220, 27926, 29710, 31572, 33512, 35530, 37626, 39800, 42052, 44382, 46790, 49374,
+                            52134, 55070, 58182, 61470, 64934, 68574, 72390, 76382, 80550, 84894, 89414, 94110, 99000,
+                            104326, 110345, 116657, 123162, 130000, 137391, 145048, 152871, 160960, 169315, 177936,
+                            186823, 195976, 205395, 215000, 224951, 235399, 246344, 257786, 269725, 282161, 295094,
+                            308524, 322451, 337000]
+精英化一阶段等级所需龙门币 = [0, 48, 119, 214, 334, 480, 653, 854, 1085, 1347, 1640, 1966, 2327, 2723, 3155, 3625, 4133,
+                              4681, 5270, 5901, 6576, 7295, 8060, 8871, 9730, 10638, 11596, 12606, 13668, 14784, 15955,
+                              17200, 18522, 19922, 21402, 22964, 24609, 26340, 28157, 30063, 32059, 34230, 36579, 39110,
+                              41827, 44734, 47834, 51132, 54631, 58336, 62250, 66377, 70721, 75286, 80093, 85387, 91436,
+                              97849, 104530, 111628, 119381, 127497, 135875, 144627, 153759, 163277, 173186, 183492,
+                              194201, 205228, 216761, 228985, 241911, 255550, 269913, 285010, 300853, 317452, 334819,
+                              353122]
+精英化二阶段等级所需经验 = [0, 191, 494, 909, 1436, 2075, 2826, 3689, 4664, 5751, 6950, 8261, 9684, 11219, 12866, 14625,
+                            16496, 18479, 20574, 22781, 25100, 27531, 30074, 32729, 35496, 38375, 41366, 44469, 47684,
+                            51011, 54450, 58052, 61817, 65745, 69836, 74090, 78507, 83087, 87830, 92736, 97805, 103037,
+                            108432, 113990, 119711, 125595, 131642, 137852, 144225, 150761, 157460, 164362, 171467,
+                            178775, 186286, 194000, 201917, 210037, 218360, 226886, 235615, 244778, 254375, 264406,
+                            274871, 285770, 297103, 308870, 321071, 333800, 346869, 360616, 375041, 390144, 405925,
+                            422384, 439521, 457336, 475829, 495000, 514849, 535954, 558315, 581932, 606805, 632934,
+                            660319, 688960, 718857, 750000]
+精英化二阶段等级所需龙门币 = [0, 76, 200, 373, 598, 877, 1211, 1603, 2054, 2567, 3144, 3786, 4496, 5276, 6127, 7052,
+                              8053, 9132, 10291, 11531, 12855, 14265, 15763, 17351, 19031, 20804, 22673, 24640, 26707,
+                              28876, 31149, 33562, 36118, 38820, 41671, 44674, 47832, 51148, 54625, 58265, 62072, 66048,
+                              70197, 74521, 79023, 83707, 88575, 93630, 98875, 104313, 109947, 115814, 121917, 128260,
+                              134847, 141682, 148768, 156108, 163707, 171568, 179695, 188308, 197416, 207026, 217146,
+                              227783, 238946, 250642, 262880, 275762, 289105, 303264, 318252, 334080, 350761, 368306,
+                              386728, 406039, 426252, 447378, 469470, 493192, 518572, 545637, 574415, 604934, 637221,
+                              671304, 707210, 744955]
+
+header = {
+    'cred': '',
+    'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
+    'Accept-Encoding': 'gzip',
+    'Connection': 'close'
+}
+header_login = {
+    'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
+    'Accept-Encoding': 'gzip',
+    'Connection': 'close'
+}
+
+# 签名请求头一定要这个顺序，否则失败
+# timestamp是必填的,其它三个随便填,不要为none即可
+header_for_sign = {
+    'platform': '',
+    'timestamp': '',
+    'dId': '',
+    'vName': ''
+}
+
+
+def generate_signature(token: str, path, body_or_query):
+    """
+    获得签名头
+    接口地址+方法为Get请求？用query否则用body+时间戳+ 请求头的四个重要参数（dId，platform，timestamp，vName）.toJSON()
+    将此字符串做HMAC加密，算法为SHA-256，密钥token为请求cred接口会返回的一个token值
+    再将加密后的字符串做MD5即得到sign
+    :param token: 拿cred时候的token
+    :param path: 请求路径（不包括网址）
+    :param body_or_query: 如果是GET，则是它的query。POST则为它的body
+    :return: 计算完毕的sign
+    """
+    # 总是说请勿修改设备时间，怕不是yj你的服务器有问题吧，所以这里特地-2
+    t = str(int(time.time()) - 2)
+    token = token.encode('utf-8')
+    header_ca = json.loads(json.dumps(header_for_sign))
+    header_ca['timestamp'] = t
+    header_ca_str = json.dumps(header_ca, separators=(',', ':'))
+    s = path + body_or_query + t + header_ca_str
+    hex_s = hmac.new(token, s.encode('utf-8'), hashlib.sha256).hexdigest()
+    md5 = hashlib.md5(hex_s.encode('utf-8')).hexdigest().encode('utf-8').decode('utf-8')  # 算出签名
+    return md5, header_ca
+
+
+def get_sign_header(url: str, method, body, old_header, sign_token):
+    h = json.loads(json.dumps(old_header))
+    p = parse.urlparse(url)
+    if method.lower() == 'get':
+        h['sign'], header_ca = generate_signature(sign_token, p.path, p.query)
+    else:
+        h['sign'], header_ca = generate_signature(sign_token, p.path, json.dumps(body))
+    for i in header_ca:
+        h[i] = header_ca[i]
+    return h
+
+
+def login_by_password():
+    r = requests.post("https://as.hypergryph.com/user/auth/v1/token_by_phone_password",
+                      json={"phone": 用户配置['手机号'], "password": 用户配置['密码']}, headers=header_login).json()
+    return get_token(r)
+
+
+def get_cred_by_token(token):
+    grant_code = get_grant_code(token)
+    return get_cred(grant_code)
+
+
+def get_token(resp):
+    if resp.get('status') != 0:
+        raise Exception(f'获得token失败：{resp["msg"]}')
+    return resp['data']['token']
+
+
+def get_grant_code(token):
+    response = requests.post("https://as.hypergryph.com/user/oauth2/v2/grant", json={
+        'appCode': '4ca99fa6b56cc2ba',
+        'token': token,
+        'type': 0
+    }, headers=header_login)
+    resp = response.json()
+    if response.status_code != 200:
+        raise Exception(f'获得认证代码失败：{resp}')
+    if resp.get('status') != 0:
+        raise Exception(f'获得认证代码失败：{resp["msg"]}')
+    return resp['data']['code']
+
+
+def get_cred(grant):
+    resp = requests.post("https://zonai.skland.com/api/v1/user/auth/generate_cred_by_code", json={
+        'code': grant,
+        'kind': 1
+    }, headers=header_login).json()
+    if resp['code'] != 0:
+        raise Exception(f'获得cred失败：{resp["message"]}')
+    return resp['data']
+
+
+def get_binding_list(sign_token):
+    v = []
+    resp = requests.get("https://zonai.skland.com/api/v1/game/player/binding",
+                        headers=get_sign_header("https://zonai.skland.com/api/v1/game/player/binding",
+                                                'get', None, header, sign_token)).json()
+
+    if resp['code'] != 0:
+        logger.warning(f"请求角色列表出现问题：{resp['message']}")
+        if resp.get('message') == '用户未登录':
+            logger.warning(f'用户登录可能失效了，请重新运行此程序！')
+            return []
+    for i in resp['data']['list']:
+        if i.get('appCode') != 'arknights':
+            continue
+        v.extend(i.get('bindingList'))
+    return v
+
+
 def 森空岛签到():
-    global 已签到日期
-    header = {
-        'cred': '',
-        'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
-        'Accept-Encoding': 'gzip',
-        'Connection': 'close'
-    }
-    header_login = {
-        'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
-        'Accept-Encoding': 'gzip',
-        'Connection': 'close'
-    }
-
-    # 签名请求头一定要这个顺序，否则失败
-    # timestamp是必填的,其它三个随便填,不要为none即可
-    header_for_sign = {
-        'platform': '',
-        'timestamp': '',
-        'dId': '',
-        'vName': ''
-    }
-
-    def generate_signature(token: str, path, body_or_query):
-        """
-        获得签名头
-        接口地址+方法为Get请求？用query否则用body+时间戳+ 请求头的四个重要参数（dId，platform，timestamp，vName）.toJSON()
-        将此字符串做HMAC加密，算法为SHA-256，密钥token为请求cred接口会返回的一个token值
-        再将加密后的字符串做MD5即得到sign
-        :param token: 拿cred时候的token
-        :param path: 请求路径（不包括网址）
-        :param body_or_query: 如果是GET，则是它的query。POST则为它的body
-        :return: 计算完毕的sign
-        """
-        # 总是说请勿修改设备时间，怕不是yj你的服务器有问题吧，所以这里特地-2
-        t = str(int(time.time()) - 2)
-        token = token.encode('utf-8')
-        header_ca = json.loads(json.dumps(header_for_sign))
-        header_ca['timestamp'] = t
-        header_ca_str = json.dumps(header_ca, separators=(',', ':'))
-        s = path + body_or_query + t + header_ca_str
-        hex_s = hmac.new(token, s.encode('utf-8'), hashlib.sha256).hexdigest()
-        md5 = hashlib.md5(hex_s.encode('utf-8')).hexdigest().encode('utf-8').decode('utf-8')    # 算出签名
-        return md5, header_ca
-
-    def get_sign_header(url: str, method, body, old_header):
-        h = json.loads(json.dumps(old_header))
-        p = parse.urlparse(url)
-        if method.lower() == 'get':
-            h['sign'], header_ca = generate_signature(sign_token, p.path, p.query)
-        else:
-            h['sign'], header_ca = generate_signature(sign_token, p.path, json.dumps(body))
-        for i in header_ca:
-            h[i] = header_ca[i]
-        return h
-
-    def login_by_password():
-        r = requests.post("https://as.hypergryph.com/user/auth/v1/token_by_phone_password",
-                          json={"phone": 用户配置['手机号'], "password": 用户配置['密码']}, headers=header_login).json()
-        return get_token(r)
-
-    def get_cred_by_token(token):
-        grant_code = get_grant_code(token)
-        return get_cred(grant_code)
-
-    def get_token(resp):
-        if resp.get('status') != 0:
-            raise Exception(f'获得token失败：{resp["msg"]}')
-        return resp['data']['token']
-
-    def get_grant_code(token):
-        response = requests.post("https://as.hypergryph.com/user/oauth2/v2/grant", json={
-            'appCode': '4ca99fa6b56cc2ba',
-            'token': token,
-            'type': 0
-        }, headers=header_login)
-        resp = response.json()
-        if response.status_code != 200:
-            raise Exception(f'获得认证代码失败：{resp}')
-        if resp.get('status') != 0:
-            raise Exception(f'获得认证代码失败：{resp["msg"]}')
-        return resp['data']['code']
-
-    def get_cred(grant):
-        resp = requests.post("https://zonai.skland.com/api/v1/user/auth/generate_cred_by_code", json={
-            'code': grant,
-            'kind': 1
-        }, headers=header_login).json()
-        if resp['code'] != 0:
-            raise Exception(f'获得cred失败：{resp["message"]}')
-        return resp['data']
-
-    def get_binding_list():
-        v = []
-        resp = requests.get("https://zonai.skland.com/api/v1/game/player/binding",
-                            headers=get_sign_header("https://zonai.skland.com/api/v1/game/player/binding",
-                                                    'get', None, header)).json()
-
-        if resp['code'] != 0:
-            logger.warning(f"请求角色列表出现问题：{resp['message']}")
-            if resp.get('message') == '用户未登录':
-                logger.warning(f'用户登录可能失效了，请重新运行此程序！')
-                return []
-        for i in resp['data']['list']:
-            if i.get('appCode') != 'arknights':
-                continue
-            v.extend(i.get('bindingList'))
-        return v
-
+    global 已签到日期, 首次登录森空岛, sign_token, characters
     try:
-        sign_token = get_cred_by_token(login_by_password())['token']
-        header['cred'] = get_cred_by_token(login_by_password())['cred']
-        characters = get_binding_list()
-
+        if 首次登录森空岛:
+            if 用户配置['登录凭证'] == '否':
+                登录凭证 = login_by_password()
+            else:
+                登录凭证 = 用户配置['登录凭证']
+            sign_token = get_cred_by_token(登录凭证)['token']
+            header['cred'] = get_cred_by_token(登录凭证)['cred']
+            characters = get_binding_list(sign_token)
+            首次登录森空岛 = False
         for i in characters:
             body = {
                 'gameId': 1,
@@ -366,28 +428,366 @@ def 森空岛签到():
             }
             resp = requests.post("https://zonai.skland.com/api/v1/game/attendance",
                                  headers=get_sign_header("https://zonai.skland.com/api/v1/game/attendance",
-                                                         'post', body, header), json=body).json()
-
+                                                         'post', body, header, sign_token), json=body).json()
             if resp['code'] == 0:
                 已签到日期 = datetime.now().strftime('%Y年%m月%d日')
                 logger.warning(f'今天是{已签到日期}，{i.get("nickName")}({i.get("channelName")})在森空岛签到成功！')
                 for j in resp['data']['awards']:
                     res = j['resource']
                     logger.warning(f'获得了{res["name"]} × {j.get("count") or 1}')
-                    if 弹窗提醒开关:
-                        托盘图标.notify(f'{i.get("nickName")}({i.get("channelName")})在森空岛签到成功！\n获得了{res["name"]} × {j.get("count") or 1}', "森空岛签到")
+                    if 弹窗提醒:   托盘图标.notify(
+                        f'{i.get("nickName")}({i.get("channelName")})在森空岛签到成功！\n获得了{res["name"]} × {j.get("count") or 1}',
+                        "森空岛签到")
             elif resp['code'] == 10001:
                 已签到日期 = datetime.now().strftime('%Y年%m月%d日')
                 logger.info(f'今天是{已签到日期}，{i.get("nickName")}({i.get("channelName")})今天在森空岛已经签过到了')
             else:
                 logger.warning(f'{i.get("nickName")}({i.get("channelName")})签到失败了！原因：{resp.get("message")}')
-                if 弹窗提醒开关:
+                if 弹窗提醒:
                     托盘图标.notify(
-                        f'{i.get("nickName")}({i.get("channelName")})签到失败了！原因：{resp.get("message")}', "森空岛签到")
+                        f'{i.get("nickName")}({i.get("channelName")})签到失败了！原因：{resp.get("message")}',
+                        "森空岛签到")
                 continue
     except Exception as ex:
         logger.warning(f'森空岛签到失败，原因：{str(ex)}')
         logger.error('', exc_info=ex)
+
+
+def 森空岛获取信息():
+    try:
+        global 首次登录森空岛, sign_token, characters
+        if 首次登录森空岛:
+            if 用户配置['登录凭证'] == '否':
+                登录凭证 = login_by_password()
+            else:
+                登录凭证 = 用户配置['登录凭证']
+            sign_token = get_cred_by_token(登录凭证)['token']
+            header['cred'] = get_cred_by_token(登录凭证)['cred']
+            characters = get_binding_list(sign_token)
+            首次登录森空岛 = False
+        for i in characters:
+            Host = f"https://zonai.skland.com/api/v1/game/player/info?uid={i.get('uid')}"
+            内容 = requests.get(Host, headers=get_sign_header(Host, 'get', None, header, sign_token)).json()
+            with open('森空岛数据.json', 'w') as 保存:
+                json.dump(内容, 保存)
+    except:
+        pass
+
+
+_理智回满剩余时间 = 9999
+_公开招募刷新次数 = 0
+_无人机充满剩余时间 = 9999
+_可赠线索 = 0
+_线索交流剩余时间 = 9999
+_干员心情提示名单 = str()
+_信息内容 = str()
+
+
+def 森空岛实时数据分析():
+    try:
+        森空岛获取信息()
+    except Exception as ex:
+        logger.warning(f'森空岛信息获取失败，原因：{str(ex)}')
+
+    门牌号 = {
+        'slot_3': 'B401',
+        'slot_5': 'B301',
+        'slot_6': 'B302',
+        'slot_7': 'B303',
+        'slot_9': 'B304',
+        'slot_13': 'B305',
+        'slot_14': 'B201',
+        'slot_15': 'B202',
+        'slot_16': 'B203',
+        'slot_20': 'B204',
+        'slot_23': 'B205',
+        'slot_24': 'B101',
+        'slot_25': 'B102',
+        'slot_26': 'B103',
+        'slot_28': 'B104',
+        'slot_32': 'B105',
+        'slot_34': '控制中枢',
+        'slot_36': '1F02',
+    }
+
+    global _理智回满剩余时间, _公开招募刷新次数, _无人机充满剩余时间, _可赠线索, _线索交流剩余时间, _干员心情提示名单, _信息内容
+    数据 = json.load(open('森空岛数据.json'))['data']
+    提示 = False
+    提示信息 = str()
+    信息内容 = str()
+
+    # 理智
+    当前理智 = 数据['status']['ap']['current'] + (数据['currentTs'] - 数据['status']['ap']['lastApAddTime']) / 360
+    理智回满剩余时间 = 数据['status']['ap']['completeRecoveryTime'] - 数据['currentTs']  # 秒
+    if 理智回满剩余时间 < 0:
+        当前理智 = 数据['status']['ap']['max']
+        理智回满剩余时间 = 0
+    if 理智回满剩余时间 < 3600:
+        信息内容 += f"当前理智 {int(当前理智)}"
+        if 理智回满剩余时间 > 0:
+            信息内容 += f"，距离理智回满前还有 {理智回满剩余时间 // 3600}小时{理智回满剩余时间 % 3600 // 60}分钟"
+        信息内容 += "\n"
+        提示信息 += f"当前理智 {int(当前理智)}！\n"
+        if _理智回满剩余时间 >= 3600:   提示 = True
+    _理智回满剩余时间 = 理智回满剩余时间
+
+    # 公开招募刷新
+    公开招募刷新次数 = 数据['building']['hire']['refreshCount']
+    公开招募刷新次数填充时间 = 数据['building']['hire']['completeWorkTime'] - 数据['currentTs']  # 秒
+    if 公开招募刷新次数填充时间 < 0:    公开招募刷新次数 += 1
+    if 公开招募刷新次数 > 3:    公开招募刷新次数 = 3
+
+    if 公开招募刷新次数 >= 2:
+        信息内容 += f"当前公开招募可刷新{公开招募刷新次数}次"
+        if 公开招募刷新次数 < 3 and 0 < 公开招募刷新次数填充时间 < 3600:
+            信息内容 += f"，{公开招募刷新次数填充时间 // 60}分钟后会填充次数"
+        信息内容 += "\n"
+        提示信息 += f"当前公开招募可刷新{公开招募刷新次数}次\n"
+        if _公开招募刷新次数 < 公开招募刷新次数 or 公开招募刷新次数 == 3:   提示 = True
+    _公开招募刷新次数 = 公开招募刷新次数
+
+    # 无人机
+    当前无人机 = (数据['building']['labor']['value']
+                  + (数据['building']['labor']['maxValue'] - 数据['building']['labor']['value'])
+                  * (数据['currentTs'] - 数据['building']['labor']['lastUpdateTime'])
+                  / 数据['building']['labor']['remainSecs'])
+    无人机充满剩余时间 = (数据['building']['labor']['lastUpdateTime']
+                          + 数据['building']['labor']['remainSecs'] - 数据['currentTs'])
+    if 无人机充满剩余时间 < 0:
+        当前无人机 = 数据['building']['labor']['maxValue']
+        无人机充满剩余时间 = 0
+    if 无人机充满剩余时间 < 3600:
+        信息内容 += f"当前无人机 {int(当前无人机)}个，{无人机充满剩余时间 // 3600}小时{无人机充满剩余时间 % 3600 // 60}分钟后充满\n"
+        提示信息 += f"当前无人机 {int(当前无人机)}个！\n"
+        if _无人机充满剩余时间 >= 3600:   提示 = True
+    _无人机充满剩余时间 = 无人机充满剩余时间
+
+    # 线索交流
+    可赠线索 = 数据['building']['meeting']['clue']['own']
+    线索交流剩余时间 = max(数据['building']['meeting']['clue']['shareCompleteTime'] - 数据['currentTs'], 0)
+    if 可赠线索 > 8:
+        信息内容 += f"可赠线索{可赠线索}个\n"
+        提示信息 += f"可赠线索{可赠线索}个！\n"
+        if _可赠线索 < 可赠线索:   提示 = True
+    if 线索交流剩余时间 < 60:
+        信息内容 += f"距线索交流结束还有 {线索交流剩余时间 // 3600}小时{线索交流剩余时间 % 3600 // 60}分钟\n"
+        提示信息 += f"距线索交流结束 {线索交流剩余时间 // 60}分钟！\n"
+        if _线索交流剩余时间 >= 60:   提示 = True
+    _可赠线索 = 可赠线索
+    _线索交流剩余时间 = 线索交流剩余时间
+
+    # 贸易站缺人
+    贸易站缺人 = False
+    for 贸易站 in 数据['building']['tradings']:
+        if len(贸易站['chars']) < 贸易站['level']:
+            if not 贸易站缺人:
+                提示 = True
+                贸易站缺人 = True
+    if 贸易站缺人:   提示信息 += "贸易站缺人！\n"
+
+    # 制造站缺人
+    制造站缺人 = False
+    for 制造站 in 数据['building']['manufactures']:
+        if len(制造站['chars']) < 制造站['level']:
+            if not 制造站缺人:
+                提示 = True
+                制造站缺人 = True
+    if 制造站缺人:   提示信息 += "制造站缺人！\n"
+
+    # 干员心情
+    干员心情提示名单 = str()
+    疲劳干员名单 = str()
+    for 疲劳干员 in 数据['building']['tiredChars']:
+        干员心情提示名单 += 疲劳干员['charId']
+        if not 疲劳干员名单 == '':    疲劳干员名单 += '、'
+        if 疲劳干员['charId'] == 'char_285_medic2':
+            承曦格雷伊 = False
+            在发电站 = False
+            for 房间 in 数据['building']['powers']:
+                for 干员 in 房间['chars']:
+                    if 干员['charId'] == 'char_1027_greyy2':
+                        承曦格雷伊 = True
+                        break
+                    if 干员['charId'] == 'char_285_medic2':  在发电站 = True
+            if 承曦格雷伊 or not 在发电站:   continue
+        疲劳干员名单 += 数据['charInfoMap'][疲劳干员['charId']]['name']
+    if not 疲劳干员名单 == str():
+        信息内容 += f"疲劳干员：{疲劳干员名单} \n"
+        提示信息 += f"疲劳干员：{疲劳干员名单} \n"
+
+    for 基建类目 in 数据['building']:
+        if 基建类目 in ['powers', 'powers', 'manufactures', 'dormitories']:
+            for 房间 in 数据['building'][基建类目]:
+                for 干员 in 房间['chars']:
+                    # 跳过心情意义不大的干员
+                    if 数据['charInfoMap'][干员['charId']]['name'] in ['纯烬艾雅法拉', '杜林', '夜莺', '凛冬', '刺玫',
+                                                                       '流明', '波登可', '桃金娘', '爱丽丝', '四月',
+                                                                       '闪灵', '车尔尼', '寒檀', '特米米', '黑', '初雪',
+                                                                       '临光', '冰酿']:
+                        continue
+                    干员心情 = 干员['ap'] / 360000
+                    if 基建类目 == 'powers':
+                        # Lancet-2
+                        if 干员['charId'] == 'char_285_medic2':
+                            承曦格雷伊 = False
+                            for 房间 in 数据['building']['powers']:
+                                for 发电站干员 in 房间['chars']:
+                                    if 发电站干员['charId'] == 'char_1027_greyy2':  承曦格雷伊 = True
+                            if 承曦格雷伊:   break
+                    if 基建类目 == 'dormitories':
+                        # 菲亚梅塔
+                        if 干员['charId'] == 'char_300_phenxi':
+                            干员心情 = min(干员心情 + (数据['currentTs'] - 干员['lastApAddTime']) / 1800, 24)
+                        if 干员心情 > 17.97:
+                            刺玫 = False
+                            for 同宿舍干员 in 房间['chars']:
+                                if 同宿舍干员['charId'] == 'char_494_vendla':
+                                    刺玫 = True
+                                    break
+                            if 刺玫:
+                                干员心情提示名单 += 干员['charId']
+                                信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}在刺玫的宿舍 {门牌号[房间['slotId']]} 心情达到了 {round(干员心情, 2)}\n"
+                                提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}在刺玫的宿舍 {门牌号[房间['slotId']]} 心情达{round(干员心情, 2)}！\n"
+                            elif 干员心情 > 23.97:
+                                干员心情提示名单 += 干员['charId']
+                                信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情达到了{round(干员心情, 2)}\n"
+                                提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情达{round(干员心情, 2)}！\n"
+                    elif 干员心情 < 1:
+                        干员心情提示名单 += 干员['charId']
+                        信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情仅剩{round(干员心情, 2)}\n"
+                        提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情仅剩{round(干员心情, 2)}了！\n"
+        elif 基建类目 in ['control', 'trading', 'meeting', 'hire']:
+            for 干员 in 数据['building'][基建类目]['chars']:
+                干员心情 = 干员['ap'] / 360000
+                if 干员心情 < 1:
+                    干员心情提示名单 += 干员['charId']
+                    信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情仅剩{round(干员心情, 2)}\n"
+                    提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情仅剩{round(干员心情, 2)}了！\n"
+                if 干员['charId'] in ['char_2023_ling', 'char_2015_dusk']:
+                    已经工作时间 = 干员['workTime'] + 数据['currentTs'] - 干员['lastApAddTime']  # 秒
+                    if 已经工作时间 > 57000:
+                        干员心情提示名单 += 干员['charId']
+                        信息内容 += f"干员{数据['charInfoMap'][干员['charId']]['name']}已经工作了{已经工作时间 // 3600}小时{已经工作时间 % 3600 // 60}分钟\n"
+                        提示信息 += f"干员{数据['charInfoMap'][干员['charId']]['name']}已经工作了{已经工作时间 // 3600}小时{已经工作时间 % 3600 // 60}分钟！\n"
+
+    # 贸易站接单时间
+    for 贸易站 in 数据['building']['tradings']:
+        if 贸易站['completeWorkTime'] > 数据[
+            'currentTs']:   信息内容 += f"贸易站 {门牌号[贸易站['slotId']]} 接单时间为 {datetime.fromtimestamp(贸易站['completeWorkTime']).strftime('%H:%M:%S')}\n"
+
+    if not _干员心情提示名单 == 干员心情提示名单:
+        提示 = True
+        _干员心情提示名单 = 干员心情提示名单
+
+    输出信息 = "---------------------------------------------------------------\n"
+    输出信息 += (
+        f"{数据['status']['name'].split('#')[0]} 博士，向您汇报，\n"
+        f"按照森空岛的目前采集到的信息推算，罗德岛需要注意的情况如下：\n")
+    输出信息 += 信息内容
+    输出信息 += (
+        f"森空岛本次汇报时间 {datetime.fromtimestamp(数据['currentTs']).strftime('%Y-%m-%d %H:%M')}\n"
+        f"森空岛信息刷新时间 "
+        f"{datetime.fromtimestamp(数据['building']['labor']['lastUpdateTime']).strftime('%Y-%m-%d %H:%M')}\n"
+        f"---------------------------------------------------------------")
+
+    已输出 = False
+    if not 信息内容 == _信息内容:
+        print(输出信息)
+        已输出 = True
+        _信息内容 = 信息内容
+    if 提示:
+        if len(提示信息) > 256: 提示信息 = "问题过多，求求你上游戏自己看看吧！"
+        托盘图标.notify(提示信息, '森空岛小秘书')
+    return 输出信息, 已输出
+
+
+def 森空岛干员阵容查询():
+    try:
+        森空岛获取信息()
+    except Exception as ex:
+        logger.warning(f'森空岛信息获取失败，原因：{str(ex)}')
+    数据 = json.load(open('森空岛数据.json'))['data']
+    阵容内容 = f"{数据['status']['name'].split('#')[0]} 博士，根据从森空岛采集到的信息，罗德岛目前的阵容概况如下：\n"
+    总计消耗经验 = 0
+    总计消耗龙门币 = 0
+
+    # 计算干员精英化与升级的经验和龙门币花销
+    for 干员 in 数据['chars']:
+        阵容内容 += 数据['charInfoMap'][干员['charId']]['name']
+        精英化阶段 = '零'
+        消耗经验 = 0
+        消耗龙门币 = 0
+        if 干员['evolvePhase'] == 0:
+            消耗经验 = 精英化零阶段等级所需经验[干员['level'] - 1]
+            消耗龙门币 = 精英化零阶段等级所需龙门币[干员['level'] - 1]
+        elif 干员['evolvePhase'] == 1:
+            精英化阶段 = '一'
+            if 数据['charInfoMap'][干员['charId']]['rarity'] == 2:
+                消耗经验 = 16400 + 精英化一阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 23947 + 精英化一阶段等级所需龙门币[干员['level'] - 1]
+            elif 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
+                消耗经验 = 20200 + 精英化一阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 34613 + 精英化一阶段等级所需龙门币[干员['level'] - 1]
+            elif 数据['charInfoMap'][干员['charId']]['rarity'] == 4:
+                消耗经验 = 24400 + 精英化一阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 46719 + 精英化一阶段等级所需龙门币[干员['level'] - 1]
+            elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
+                消耗经验 = 24400 + 精英化一阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 56719 + 精英化一阶段等级所需龙门币[干员['level'] - 1]
+        elif 干员['evolvePhase'] == 2:
+            精英化阶段 = '二'
+            if 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
+                消耗经验 = 150200 + 精英化二阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 206241 + 精英化二阶段等级所需龙门币[干员['level'] - 1]
+            elif 数据['charInfoMap'][干员['charId']]['rarity'] == 4:
+                消耗经验 = 239400 + 精英化二阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 371947 + 精英化二阶段等级所需龙门币[干员['level'] - 1]
+            elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
+                消耗经验 = 361400 + 精英化二阶段等级所需经验[干员['level'] - 1]
+                消耗龙门币 = 589841 + 精英化二阶段等级所需龙门币[干员['level'] - 1]
+        if 干员['charId'] == 'char_1001_amiya2':
+            消耗经验 = 0
+            消耗龙门币 = 0
+            阵容内容 += "（近卫）"
+        阵容内容 += f"：精英化{精英化阶段}阶段{干员['level']}级，"
+
+        # 计算干员模组的龙门币花销
+        if 干员['evolvePhase'] == 2:
+            for 模组 in 干员['equip']:
+                模组是开的 = False
+                if 模组['level'] == 3:
+                    模组是开的 = True
+                    if 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
+                        消耗龙门币 += 30000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 4:
+                        消耗龙门币 += 60000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
+                        消耗龙门币 += 120000
+                elif 模组['level'] == 2:
+                    模组是开的 = True
+                    if 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
+                        消耗龙门币 += 25000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 4:
+                        消耗龙门币 += 50000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
+                        消耗龙门币 += 100000
+                elif not 数据['equipmentInfoMap'][模组['id']]['typeIcon'] == 'original' and 模组['id'] == 干员[
+                    'defaultEquipId']:
+                    模组是开的 = True
+                    if 数据['charInfoMap'][干员['charId']]['rarity'] == 3:
+                        消耗龙门币 += 20000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 4:
+                        消耗龙门币 += 40000
+                    elif 数据['charInfoMap'][干员['charId']]['rarity'] == 5:
+                        消耗龙门币 += 80000
+                if 模组是开的:   阵容内容 += f"模组「{数据['equipmentInfoMap'][模组['id']]['name']}」等级{模组['level']}，"
+
+        阵容内容 += f"消耗经验 {消耗经验} 龙门币 {消耗龙门币}\n"
+        总计消耗经验 += 消耗经验
+        总计消耗龙门币 += 消耗龙门币
+    print(阵容内容)
+    logger.warning(
+        f"总计消耗经验 {总计消耗经验} 龙门币 {总计消耗龙门币} 龙门币/经验比例为 {round(总计消耗龙门币 / 总计消耗经验, 3)}")
 
 
 class 项目经理(BaseSolver):
@@ -410,10 +810,19 @@ class 项目经理(BaseSolver):
         logger.info('返回基建主界面')
         返回计数 = 0
         while self.get_infra_scene() != 201:
+            if self.find('login_awake') is not None:
+                self.tap_element('login_awake')
+                break
+            elif self.find('index_infrastructure') is not None:
+                self.tap_element('index_infrastructure')
+                break
+            time.sleep(1)
             self.back()
             返回计数 += 1
             if 返回计数 > 10:
+                self.tap((self.recog.w // 4, self.recog.h * 7 // 10))
                 self.处理报错()
+                break
             self.recog.update()
 
     def run(self) -> None:
@@ -431,15 +840,15 @@ class 项目经理(BaseSolver):
         self.collect_notification = False
         self.planned = False
         if self.干员信息 is None or self.干员信息.operators is None:
-            self.initialize_operators()
+            self.干员信息初始化()
         return super().run()
 
     def transition(self) -> None:
         self.recog.update()
-        if self.scene() == 1:
-            self.tap_element('index_infrastructure')
+        if self.get_infra_scene() == 1:
+            self.tap_themed_element('index_infrastructure')
         elif self.scene() == 201:
-            return self.infra_main()
+            return self.基建主程序()
         elif self.scene() == 202:
             return self.收获()
         elif self.scene() == 205:
@@ -452,9 +861,9 @@ class 项目经理(BaseSolver):
             self.tap_element('nav_infrastructure')
         elif self.scene() == 207:
             self.tap_element('arrange_blue_yes')
-        elif self.scene() != -1:
+        elif self.get_infra_scene() == -1 or self.scene() != -1:
             self.back_to_index()
-            self.last_room = ''
+            self.上个房间 = ''
         else:
             raise RecognizeError('Unknown scene')
 
@@ -474,11 +883,11 @@ class 项目经理(BaseSolver):
         循环次数 = 0
         while self.scene() == -1:
             self.recog.update()
-            logger.info('处理报错')
+            logger.error('处理报错')
             self.返回基建主界面()
             循环次数 += 1
             if (datetime.now() - 报错计时).total_seconds() > self.跑单提前运行时间 // 3:
-                logger.info(f'报错次数达{循环次数}，时间长达{(datetime.now() - 报错计时).total_seconds()}')
+                logger.info(f'报错次数达{循环次数}次，时间长达{round((datetime.now() - 报错计时).total_seconds())}秒')
                 循环次数 = 0
                 重新运行Mower0()
         if self.error or force:
@@ -495,7 +904,7 @@ class 项目经理(BaseSolver):
             self.任务列表.append(SchedulerTask(time=datetime.now() + timedelta(hours=2.5)))
         return True
 
-    def infra_main(self):
+    def 基建主程序(self):
         """ 位于基建首页 """
         if self.find('control_central') is None:
             self.back()
@@ -509,17 +918,15 @@ class 项目经理(BaseSolver):
                     self.跑单(self.任务.plan, get_time)
                     if get_time:
                         self.plan_metadata()
-                # elif self.任务.type == 'impart':
-                #     self.skip(['planned', 'collect_notification'])
                 del self.任务列表[0]
             except Exception as e:
                 logger.exception(e)
-                self.skip()
+                self.跳过()
                 self.error = True
             self.任务 = None
         elif not self.planned:
             try:
-                self.plan_solver()
+                self.任务调度器()
             except Exception as e:
                 # 重新扫描
                 self.error = True
@@ -528,37 +935,35 @@ class 项目经理(BaseSolver):
         elif not self.todo_task:
             self.todo_task = True
         elif not self.collect_notification:
-            notification = detector.infra_notification(self.recog.img)
-            if notification is None:
+            公告 = detector.infra_notification(self.recog.img)
+            if 公告 is None:
                 time.sleep(1)
-                notification = detector.infra_notification(self.recog.img)
-            if notification is not None:
-                self.tap(notification)
+                公告 = detector.infra_notification(self.recog.img)
+            if 公告 is not None:
+                self.tap(公告)
             self.collect_notification = True
         else:
             return self.处理报错()
 
-    def plan_solver(self):
+    def 任务调度器(self):
         plan = self.plan
         # 如果下个 普通任务 <10 分钟则跳过 plan
-        if self.find_next_task(datetime.now() + timedelta(seconds=600)) is not None:
-            return
+        if self.find_next_task(datetime.now() + timedelta(seconds=600)) is not None:    return
         if len(self.run_order_rooms) > 0:
-            for k, v in self.run_order_rooms.items():
-                # 如果没有当前房间数据
-                if 'plan' not in v.keys():
-                    v['plan'] = self.干员信息.get_current_room(k)
-                if self.find_next_task(task_type=k) is not None: continue;
-                in_out_plan = {k: ['Current'] * len(plan[k])}
-                for idx, x in enumerate(plan[k]):
-                    if '但书' in x['replacement'] or '龙舌兰' in x['replacement']:
-                        in_out_plan[k][idx] = x['replacement'][0]
+            for 房间, 冗余信息 in self.run_order_rooms.items():
+                if self.find_next_task(task_type=房间) is not None: continue;
+                下次跑单任务 = {房间: ['Current'] * len(plan[房间])}
+                for 序号, 位置 in enumerate(plan[房间]):
+                    if '但书' in 位置['replacement'] or '龙舌兰' in 位置['replacement']:
+                        下次跑单任务[房间][序号] = 位置['replacement'][0]
+                # 点击进入该房间
+                self.进入房间(房间)
                 self.任务列表.append(
-                    SchedulerTask(time=self.读取接单时间(k), task_plan=in_out_plan, task_type=k))
+                    SchedulerTask(time=self.读取接单时间(房间), task_plan=下次跑单任务, task_type=房间))
         # 准备数据
         logger.debug(self.干员信息.print())
 
-    def initialize_operators(self):
+    def 干员信息初始化(self):
         plan = self.plan
         self.干员信息 = Operators({}, 4, plan)
         for room in plan.keys():
@@ -566,42 +971,39 @@ class 项目经理(BaseSolver):
                 self.干员信息.add(Operator(data["agent"], room, idx, data["group"], data["replacement"], 'high',
                                            operator_type="high"))
         # 跑单
-        for x, y in self.plan.items():
-            if not x.startswith('room'): continue
-            if any(('但书' in obj['replacement'] or '龙舌兰' in obj['replacement']) for obj in y):
-                self.run_order_rooms[x] = {}
+        for 门牌号, 排班表 in self.plan.items():
+            if not 门牌号.startswith('room'): continue
+            if any(('但书' in 位置['replacement'] or '龙舌兰' in 位置['replacement']) for 位置 in 排班表):
+                self.run_order_rooms[门牌号] = {}
 
-    def 读取接单时间(self, room):
-        logger.info(f'读取贸易站 B{room[5]}0{room[7]} 接单时间')
-        # 点击进入该房间
-        self.进入房间(room)
+    def 读取接单时间(self, 门牌号):
+        logger.info(f'读取贸易站 B{门牌号[5]}0{门牌号[7]} 接单时间')
         # 进入房间详情
-        error_count = 0
+        报错计数 = 0
         while self.find('bill_accelerate') is None:
-            if error_count > 5:
+            if 报错计数 > 5:
                 raise Exception('未成功进入订单界面')
             self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=1)
-            error_count += 1
-        execute_time = self.double_read_time((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
-                                              self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
-                                             use_digit_reader=True)
-        logger.info(f'贸易站 B{room[5]}0{room[7]} 接单时间为 {execute_time.strftime("%H:%M:%S")}')
-        execute_time = execute_time - timedelta(seconds=(self.跑单提前运行时间))
+            报错计数 += 1
+        接单等待时间 = self.统合读取时间((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                                          self.recog.w * 815 // 2496, self.recog.h * 710 // 1404), 读数器=True)
+        logger.info(f'贸易站 B{门牌号[5]}0{门牌号[7]} 接单时间为 {接单等待时间.strftime("%H:%M:%S")}')
+        跑单等待时间 = 接单等待时间 - timedelta(seconds=(self.跑单提前运行时间))
         self.recog.update()
         self.返回基建主界面()
-        return execute_time
+        return 跑单等待时间
 
-    def double_read_time(self, cord, upperLimit=None, use_digit_reader=False):
-        if upperLimit is not None and upperLimit < 36000:
-            upperLimit = 36000
+    def 统合读取时间(self, 位置范围, 上限=None, 读数器=False):
+        if 上限 is not None and 上限 < 36000:
+            上限 = 36000
         self.recog.update()
-        time_in_seconds = self.read_time(cord, upperLimit, use_digit_reader)
-        if time_in_seconds is None:
+        总秒数 = self.读取时间(位置范围, 上限, 读数器)
+        if 总秒数 is None:
             return datetime.now()
-        execute_time = datetime.now() + timedelta(seconds=(time_in_seconds))
-        return execute_time
+        行动时间 = datetime.now() + timedelta(seconds=(总秒数))
+        return 行动时间
 
-    def initialize_paddle(self):
+    def 飞桨初始化(self):
         global ocr
         if ocr is None:
             # mac 平台不支持 mkldnn 加速，关闭以修复 mac 运行时错误
@@ -611,174 +1013,184 @@ class 项目经理(BaseSolver):
                 ocr = PaddleOCR(enable_mkldnn=True, use_angle_cls=False, cls=False, show_log=False)
             # ocr = PaddleOCR(enable_mkldnn=False, use_angle_cls=False, cls=False, show_log=False)
 
-    def read_screen(self, img, type="mood", limit=24, cord=None):
-        if cord is not None:
-            img = img[cord[1]:cord[3], cord[0]:cord[2]]
-        if 'mood' in type or type == "time":
+    def 读取屏幕(self, 图像, 模式="心情", 上限=24, 位置范围=None):
+        if 位置范围 is not None:
+            图像 = 图像[位置范围[1]:位置范围[3], 位置范围[0]:位置范围[2]]
+        if '心情' in 模式 or 模式 == "时间":
             # 心情图片太小，复制8次提高准确率
-            for x in range(0, 4):
-                img = cv2.vconcat([img, img])
+            for 序号 in range(0, 4):
+                图像 = cv2.vconcat([图像, 图像])
         try:
-            self.initialize_paddle()
-            rets = ocr.ocr(img, cls=False)
+            self.飞桨初始化()
+            rets = ocr.ocr(图像, cls=False)
             line_conf = []
-            for idx in range(len(rets[0])):
-                res = rets[0][idx]
-                if 'mood' in type:
+            for 序号 in range(len(rets[0])):
+                res = rets[0][序号]
+                if '心情' in 模式:
                     # 筛选掉不符合规范的结果
-                    if ('/' + str(limit)) in res[1][0]:
+                    if ('/' + str(上限)) in res[1][0]:
                         line_conf.append(res[1])
                 else:
                     line_conf.append(res[1])
             logger.debug(line_conf)
             if len(line_conf) == 0:
-                if 'mood' in type:
+                if '心情' in 模式:
                     return -1
-                elif 'name' in type:
+                elif '名字' in 模式:
                     logger.debug("使用老版识别")
-                    return character_recognize.agent_name(img, self.recog.h)
+                    return character_recognize.agent_name(图像, self.recog.h)
                 else:
                     return ""
             x = [i[0] for i in line_conf]
-            __str = max(set(x), key=x.count)
-            if "mood" in type:
-                if '.' in __str:
-                    __str = __str.replace(".", "")
-                number = int(__str[0:__str.index('/')])
-                return number
-            elif 'time' in type:
-                if '.' in __str:
-                    __str = __str.replace(".", ":")
-            elif 'name' in type and __str not in agent_list:
+            识别到的字符串 = max(set(x), key=x.count)
+            if "心情" in 模式:
+                if '.' in 识别到的字符串:
+                    识别到的字符串 = 识别到的字符串.replace(".", "")
+                心情值 = int(识别到的字符串[0:识别到的字符串.index('/')])
+                return 心情值
+            elif '时间' in 模式:
+                if '.' in 识别到的字符串:
+                    识别到的字符串 = 识别到的字符串.replace(".", ":")
+            elif '名字' in 模式 and 识别到的字符串 not in agent_list:
                 logger.debug("使用老版识别")
-                __str = character_recognize.agent_name(img, self.recog.h)
-            logger.debug(__str)
-            return __str
+                识别到的字符串 = character_recognize.agent_name(图像, self.recog.h)
+            logger.debug(识别到的字符串)
+            return 识别到的字符串
         except Exception as e:
             logger.exception(e)
-            return limit + 1
+            return 上限 + 1
 
-    def read_time(self, cord, upperlimit, error_count=0, use_digit_reader=False):
+    def 读取时间(self, 位置范围, 上限, 报错计数=0, 读数器=False):
         # 刷新图片
         self.recog.update()
-        if use_digit_reader:
-            time_str = self.digit_reader.get_time(self.recog.gray, self.recog.h, self.recog.w)
+        if 读数器:
+            时间字符串 = self.digit_reader.get_time(self.recog.gray, self.recog.h, self.recog.w)
         else:
-            time_str = self.read_screen(self.recog.img, type='time', cord=cord)
+            时间字符串 = self.读取屏幕(self.recog.img, 模式='时间', 位置范围=位置范围)
         try:
-            h, m, s = str(time_str).split(':')
-            if int(m) > 60 or int(s) > 60:
+            时, 分, 秒 = str(时间字符串).split(':')
+            if int(分) > 60 or int(秒) > 60:
                 raise Exception(f"读取错误")
-            res = int(h) * 3600 + int(m) * 60 + int(s)
-            if upperlimit is not None and res > upperlimit:
+            折算秒数 = int(时) * 3600 + int(分) * 60 + int(秒)
+            if 上限 is not None and 折算秒数 > 上限:
                 raise Exception(f"超过读取上限")
             else:
-                return res
+                return 折算秒数
         except:
             logger.error("读取失败")
-            if error_count > 3:
-                logger.exception(f"读取失败{error_count}次超过上限")
+            if 报错计数 > 3:
+                logger.exception(f"读取失败{报错计数}次超过上限")
                 return None
             else:
-                return self.read_time(cord, upperlimit, error_count + 1, use_digit_reader)
+                return self.读取时间(位置范围, 上限, 报错计数 + 1, 读数器)
 
     def 收获(self) -> None:
         """ 处理基建收获产物列表 """
         tapped = False
-        trust = self.find('infra_collect_trust')
-        if trust is not None:
+        干员信赖值 = self.find('infra_collect_trust')
+        if 干员信赖值 is not None:
             logger.info('干员信赖')
-            self.tap(trust)
+            self.tap(干员信赖值)
             tapped = True
-        bill = self.find('infra_collect_bill')
-        if bill is not None:
+        订单 = self.find('infra_collect_bill')
+        if 订单 is not None:
             logger.info('订单交付')
-            self.tap(bill)
+            self.tap(订单)
             tapped = True
-        factory = self.find('infra_collect_factory')
-        if factory is not None:
+        制造产物 = self.find('infra_collect_factory')
+        if 制造产物 is not None:
             logger.info('可收获')
-            self.tap(factory)
+            self.tap(制造产物)
             tapped = True
         if not tapped:
             self.tap((self.recog.w // 20, self.recog.h * 19 // 20))
             self.todo_task = True
 
-    def 进入房间(self, room: str) -> tp.Rectangle:
+    def 进入房间(self, 门牌号: str) -> tp.Rectangle:
         """ 获取房间的位置并进入 """
 
         # 获取基建各个房间的位置
-        base_room = segment.base(self.recog.img, self.find('control_central', strict=True))
+        基建房间划分 = segment.base(self.recog.img, self.find('control_central', strict=True))
         # 将画面外的部分删去
-        _room = base_room[room]
+        _房间 = 基建房间划分[门牌号]
 
         for i in range(4):
-            _room[i, 0] = max(_room[i, 0], 0)
-            _room[i, 0] = min(_room[i, 0], self.recog.w)
-            _room[i, 1] = max(_room[i, 1], 0)
-            _room[i, 1] = min(_room[i, 1], self.recog.h)
+            _房间[i, 0] = max(_房间[i, 0], 0)
+            _房间[i, 0] = min(_房间[i, 0], self.recog.w)
+            _房间[i, 1] = max(_房间[i, 1], 0)
+            _房间[i, 1] = min(_房间[i, 1], self.recog.h)
 
         # 点击进入
-        self.tap(_room[0], interval=1)
+        self.tap(_房间[0], interval=1)
         while self.find('control_central') is not None:
-            self.tap(_room[0], interval=1)
-        if room.startswith('room'):
-            logger.info(f'进入房间 B{room[5]}0{room[7]}')
-        elif room == 'dormitory_4':
+            self.tap(_房间[0], interval=1)
+        if 门牌号.startswith('room'):
+            logger.info(f'进入房间 B{门牌号[5]}0{门牌号[7]}')
+        elif 门牌号 == 'dormitory_4':
             logger.info('进入房间 B401')
         else:
-            logger.info(f'进入房间 B{room[10]}04')
+            logger.info(f'进入房间 B{门牌号[10]}04')
 
-    def 无人机加速(self, room: str, not_customize=False, not_return=False):
+    def 无人机协助跑单(self):
+        logger.info('无人机协助跑单')
+        while self.find('bill_accelerate') is not None: self.tap_element('bill_accelerate')
+        点击计数 = 0
+        while self.find('all_in') is not None and 点击计数 < 10:
+            self.tap_element('all_in')
+            点击计数 += 1
+        while self.find('bill_accelerate') is None: self.tap((self.recog.w * 3 // 4, self.recog.h * 4 // 5))
+
+    def 无人机加速拉开订单间时间差距(self, 门牌号: str, not_customize=False, not_return=False):
         # 点击进入该房间
-        self.进入房间(room)
+        self.进入房间(门牌号)
         while self.get_infra_scene() == 9:
             time.sleep(1)
             self.recog.update()
         # 进入房间详情
         self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=3)
         # 关闭掉房间总览
-        error_count = 0
+        报错计数 = 0
         while self.find('factory_accelerate') is None and self.find('bill_accelerate') is None:
-            if error_count > 5:
+            if 报错计数 > 5:
                 raise Exception('未成功进入无人机界面')
             self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=3)
-            error_count += 1
-        accelerate = self.find('bill_accelerate')
-        if accelerate:
+            报错计数 += 1
+        无人机协助 = self.find('bill_accelerate')
+        if 无人机协助:
             while (self.任务列表[1].time - self.任务列表[0].time).total_seconds() < self.跑单提前运行时间:
-                logger.info(f'房间 B{room[5]}0{room[7]}')
-                self.tap(accelerate)
-                while self.get_infra_scene() == 9:
-                    time.sleep(1)
-                    self.recog.update()
+                logger.info(f'房间 B{门牌号[5]}0{门牌号[7]}')
+                self.tap(无人机协助)
+                if self.get_infra_scene() == 9:
+                    if not self.waiting_solver(9, sleep_time=2):
+                        return
                 self.device.tap((self.recog.w * 1320 // 1920, self.recog.h * 502 // 1080))
                 time.sleep(1)
-                while self.get_infra_scene() == 9:
-                    time.sleep(1)
-                    self.recog.update()
+                if self.get_infra_scene() == 9:
+                    if not self.waiting_solver(9, sleep_time=2):
+                        return
                 self.tap((self.recog.w * 3 // 4, self.recog.h * 4 // 5))
-                while self.get_infra_scene() == 9:
-                    time.sleep(1)
-                    self.recog.update()
+                if self.get_infra_scene() == 9:
+                    if not self.waiting_solver(9, sleep_time=2):
+                        return
                 while self.find('bill_accelerate') is None:
-                    if error_count > 5:
+                    if 报错计数 > 5:
                         raise Exception('未成功进入订单界面')
                     self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=1)
-                    error_count += 1
-                加速后接单时间 = self.double_read_time((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
-                                                        self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
-                                                       use_digit_reader=True)
+                    报错计数 += 1
+                加速后接单时间 = self.统合读取时间((self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                                                    self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
+                                                   读数器=True)
                 self.任务列表[0].time = 加速后接单时间 - timedelta(seconds=(self.跑单提前运行时间))
-                logger.info(f'房间 B{room[5]}0{room[7]} 无人机加速后接单时间为 {加速后接单时间.strftime("%H:%M:%S")}')
+                logger.info(
+                    f'房间 B{门牌号[5]}0{门牌号[7]} 无人机加速后接单时间为 {加速后接单时间.strftime("%H:%M:%S")}')
                 if not_customize:
                     无人机数量 = self.digit_reader.get_drone(self.recog.gray, self.recog.h, self.recog.w)
                     logger.info(f'当前无人机数量为 {无人机数量}')
                 while self.find('bill_accelerate') is None:
-                    if error_count > 5:
+                    if 报错计数 > 5:
                         raise Exception('未成功进入订单界面')
                     self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=1)
-                    error_count += 1
+                    报错计数 += 1
         if not_return: return
         self.recog.update()
         logger.info('返回基建主界面')
@@ -787,75 +1199,74 @@ class 项目经理(BaseSolver):
 
     def get_arrange_order(self) -> 干员排序方式:
         best_score, best_order = 0, None
-        for order in 干员排序方式:
-            score = self.recog.score(干员排序方式位置[order][0])
+        for 顺序 in 干员排序方式:
+            score = self.recog.score(干员排序方式位置[顺序][0])
             if score is not None and score[0] > best_score:
-                best_score, best_order = score[0], order
+                best_score, best_order = score[0], 顺序
         logger.debug((best_score, best_order))
         return best_order
 
-    def switch_arrange_order(self, index: int, asc="false") -> None:
-        self.tap((self.recog.w * 干员排序方式位置[干员排序方式(index)][0],
-                  self.recog.h * 干员排序方式位置[干员排序方式(index)][1]), interval=0, rebuild=False)
+    def 切换干员排序方式(self, 方式序号: int, 倒序="false") -> None:
+        self.tap((self.recog.w * 干员排序方式位置[干员排序方式(方式序号)][0],
+                  self.recog.h * 干员排序方式位置[干员排序方式(方式序号)][1]), interval=0, rebuild=False)
         # 点个不需要的
-        if index < 4:
-            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(index + 1)][0],
-                      self.recog.h * 干员排序方式位置[干员排序方式(index)][1]), interval=0, rebuild=False)
+        if 方式序号 < 4:
+            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(方式序号 + 1)][0],
+                      self.recog.h * 干员排序方式位置[干员排序方式(方式序号)][1]), interval=0, rebuild=False)
         else:
-            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(index - 1)][0],
-                      self.recog.h * 干员排序方式位置[干员排序方式(index)][1]), interval=0, rebuild=False)
+            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(方式序号 - 1)][0],
+                      self.recog.h * 干员排序方式位置[干员排序方式(方式序号)][1]), interval=0, rebuild=False)
         # 切回来
-        self.tap((self.recog.w * 干员排序方式位置[干员排序方式(index)][0],
-                  self.recog.h * 干员排序方式位置[干员排序方式(index)][1]), interval=0.2, rebuild=True)
-        # 倒序
-        if asc != "false":
-            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(index)][0],
-                      self.recog.h * 干员排序方式位置[干员排序方式(index)][1]), interval=0.2, rebuild=True)
+        self.tap((self.recog.w * 干员排序方式位置[干员排序方式(方式序号)][0],
+                  self.recog.h * 干员排序方式位置[干员排序方式(方式序号)][1]), interval=0.2, rebuild=True)
+        if 倒序 != "false":
+            self.tap((self.recog.w * 干员排序方式位置[干员排序方式(方式序号)][0],
+                      self.recog.h * 干员排序方式位置[干员排序方式(方式序号)][1]), interval=0.2, rebuild=True)
 
-    def scan_agant(self, agent: list[str], error_count=0, max_agent_count=-1):
+    def 查找干员(self, 查找干员列表: list[str], 报错计数=0, 最多干员总数=-1):
         try:
             # 识别干员
             self.recog.update()
-            ret = character_recognize.agent(self.recog.img)  # 返回的顺序是从左往右从上往下
+            屏幕内识别到的干员 = character_recognize.agent(self.recog.img)  # 返回的顺序是从左往右从上往下
             # 提取识别出来的干员的名字
-            select_name = []
-            for y in ret:
-                name = y[0]
-                if name in agent:
-                    select_name.append(name)
-                    self.tap((y[1][0]), interval=0)
-                    agent.remove(name)
+            选中干员列表 = []
+            for 干员 in 屏幕内识别到的干员:
+                干员名 = 干员[0]
+                if 干员名 in 查找干员列表:
+                    选中干员列表.append(干员名)
+                    self.tap((干员[1][0]), interval=0)
+                    查找干员列表.remove(干员名)
                     # 如果是按照个数选择 Free
-                    if max_agent_count != -1:
-                        if len(select_name) >= max_agent_count:
-                            return select_name, ret
-            return select_name, ret
+                    if 最多干员总数 != -1:
+                        if len(选中干员列表) >= 最多干员总数:
+                            return 选中干员列表, 屏幕内识别到的干员
+            return 选中干员列表, 屏幕内识别到的干员
         except Exception as e:
-            error_count += 1
-            if error_count < 3:
+            报错计数 += 1
+            if 报错计数 < 3:
                 logger.exception(e)
                 time.sleep(1)
-                return self.scan_agant(agent, error_count, max_agent_count)
+                return self.查找干员(查找干员列表, 报错计数, 最多干员总数)
             else:
                 raise e
 
-    def detail_filter(self, turn_on, type="not_in_dorm"):
-        logger.info(f'开始 {("打开" if turn_on else "关闭")} {type} 筛选')
+    def 筛选器(self, 开, 模式="未进驻"):
+        logger.info(f'开始 {("打开" if 开 else "关闭")} {模式} 筛选')
         self.tap((self.recog.w * 19 // 20, self.recog.h // 20), interval=1)
-        if type == "not_in_dorm":
-            not_in_dorm = self.find('arrange_non_check_in', score=0.9)
-            if turn_on ^ (not_in_dorm is None):
+        if 模式 == "未进驻":
+            未进驻 = self.find('arrange_non_check_in', score=0.9)
+            if 开 ^ (未进驻 is None):
                 self.tap((self.recog.w * 3 // 10, self.recog.h // 2), interval=0.5)
         # 确认
         self.tap((self.recog.w * 4 // 5, self.recog.h * 4 // 5), interval=0.5)
 
-    def 换上干员(self, agents: list[str], room: str) -> None:
+    def 换上干员(self, 换上干员列表: list[str], 门牌号: str) -> None:
         """
         :param order: 干员排序方式, 选择干员时右上角的排序功能
         """
-        first_name = ''
-        max_swipe = 50
-        for 序号, 干员名 in enumerate(agents):
+        首位干员 = ''
+        最大连续滑动次数 = 50
+        for 序号, 干员名 in enumerate(换上干员列表):
             if 干员名 == '':
                 logger.error(f'''
                 用 Mower0 跑单的话平时就不要让龙舌兰和但书上班了 \n
@@ -868,147 +1279,154 @@ class 项目经理(BaseSolver):
                 用 Mower0 跑单的话平时就不要让龙舌兰和但书上班了 \n
                 请修改贸易站平时的上班干员后重新运行 Mower0！
                 ''', "请修改贸易站干员后再重新运行 Mower0")
-                退出程序()
-        agent = copy.deepcopy(agents)
+                停止运行Mower0()
+        当前换上干员列表 = copy.deepcopy(换上干员列表)
         换上干员名单 = str()
-        for 干员名 in agent:
+        for 干员名 in 当前换上干员列表:
             if not 换上干员名单 == '':    换上干员名单 += '、'
             换上干员名单 += 干员名
-        if room.startswith('room') and ('但书' in agent or '龙舌兰' in agent):
+        if 门牌号.startswith('room') and ('但书' in 当前换上干员列表 or '龙舌兰' in 当前换上干员列表):
             logger.info(
-                f'{换上干员名单} 进驻房间 B{room[5]}0{room[7]} 时间为 {(self.任务列表[0].time + timedelta(seconds=(self.跑单提前运行时间 - self.更换干员前缓冲时间))).strftime("%H:%M:%S")}')
+                f'{换上干员名单} 进驻房间 B{门牌号[5]}0{门牌号[7]} 时间为 {(self.任务列表[0].time + timedelta(seconds=(self.跑单提前运行时间 - self.更换干员前缓冲时间))).strftime("%H:%M:%S")}')
         else:
             logger.info(f'换上 {换上干员名单}')
-        h, w = self.recog.h, self.recog.w
-        first_time = True
-        right_swipe = 0
-        retry_count = 0
+        刚进入干员选择界面 = True
+        右移次数 = 0
+        重试计数 = 0
         # 如果重复进入宿舍则需要排序
-        selected = []
-        if room.startswith('room'):
-            self.switch_arrange_order(2, "asc")
+        选中干员列表 = []
+        if 门牌号.startswith('room'):
+            self.切换干员排序方式(2, "asc")
         else:
-            self.switch_arrange_order(3, "asc")
-        while len(agent) > 0:
-            if retry_count > 3: raise Exception(f"到达最大尝试次数 3次")
-            if right_swipe > max_swipe:
+            self.切换干员排序方式(3, "asc")
+        while len(当前换上干员列表) > 0:
+            if 重试计数 > 3: raise Exception(f"到达最大尝试次数 3次")
+            if 右移次数 > 最大连续滑动次数:
                 # 到底了则返回再来一次
-                for _ in range(right_swipe):
-                    self.swipe_only((w // 2, h // 2), (w // 2, 0), interval=0.5)
-                right_swipe = 0
-                max_swipe = 50
-                retry_count += 1
-                self.detail_filter(False)
-            if first_time:
-                self.tap((self.recog.w * 0.38, self.recog.h * 0.95), interval=0.5)
-                changed, ret = self.scan_agant(agent)
-                if changed:
-                    selected.extend(changed)
-                    if len(agent) == 0: break
-            first_time = False
+                for _ in range(右移次数):
+                    self.swipe_only((self.recog.w // 2, self.recog.h // 2), (self.recog.w // 2, 0), interval=0.5)
+                右移次数 = 0
+                最大连续滑动次数 = 50
+                重试计数 += 1
+                self.筛选器(False)
+            if 刚进入干员选择界面:
+                self.tap((self.recog.w * 19 // 50, self.recog.h * 19 // 20), interval=0.5)
+                当前选中干员列表, 屏幕中识别到的干员 = self.查找干员(当前换上干员列表)
+                if 当前选中干员列表:
+                    选中干员列表.extend(当前选中干员列表)
+                    if len(当前换上干员列表) == 0: break
+            刚进入干员选择界面 = False
 
-            changed, ret = self.scan_agant(agent)
-            if changed:
-                selected.extend(changed)
+            当前选中干员列表, 屏幕中识别到的干员 = self.查找干员(当前换上干员列表)
+            if 当前选中干员列表:
+                选中干员列表.extend(当前选中干员列表)
             else:
                 # 如果没找到 而且右移次数大于5
-                if ret[0][0] == first_name and right_swipe > 5:
-                    max_swipe = right_swipe
+                if 屏幕中识别到的干员[0][0] == 首位干员 and 右移次数 > 5:
+                    最大连续滑动次数 = 右移次数
                 else:
-                    first_name = ret[0][0]
-                st = ret[-2][1][2]  # 起点
-                ed = ret[0][1][1]  # 终点
+                    首位干员 = 屏幕中识别到的干员[0][0]
+                st = 屏幕中识别到的干员[-2][1][2]  # 起点
+                ed = 屏幕中识别到的干员[0][1][1]  # 终点
                 self.swipe_noinertia(st, (ed[0] - st[0], 0))
-                right_swipe += 1
-            if len(agent) == 0: break;
+                右移次数 += 1
+            if len(当前换上干员列表) == 0: break;
 
         # 排序
-        if len(agents) != 1:
+        if len(换上干员列表) != 1:
             # 左移
-            self.swipe_left(right_swipe, w, h)
+            self.左移(右移次数, self.recog.w, self.recog.h)
             self.tap((self.recog.w * 干员排序方式位置[干员排序方式.技能][0],
                       self.recog.h * 干员排序方式位置[干员排序方式.技能][1]), interval=0.5, rebuild=False)
-            position = [(0.35, 0.35), (0.35, 0.75), (0.45, 0.35), (0.45, 0.75), (0.55, 0.35)]
-            not_match = False
-            for idx, item in enumerate(agents):
-                if agents[idx] != selected[idx] or not_match:
-                    not_match = True
-                    p_idx = selected.index(agents[idx])
-                    self.tap((self.recog.w * position[p_idx][0], self.recog.h * position[p_idx][1]), interval=0.5,
+            相对位置列表 = [(0.35, 0.35), (0.35, 0.75), (0.45, 0.35), (0.45, 0.75), (0.55, 0.35)]
+            不匹配 = False
+            for 序号, item in enumerate(换上干员列表):
+                if 换上干员列表[序号] != 选中干员列表[序号] or 不匹配:
+                    不匹配 = True
+                    p_idx = 选中干员列表.index(换上干员列表[序号])
+                    self.tap((self.recog.w * 相对位置列表[p_idx][0], self.recog.h * 相对位置列表[p_idx][1]),
+                             interval=0.5,
                              rebuild=False)
-                    self.tap((self.recog.w * position[p_idx][0], self.recog.h * position[p_idx][1]), interval=0.5,
+                    self.tap((self.recog.w * 相对位置列表[p_idx][0], self.recog.h * 相对位置列表[p_idx][1]),
+                             interval=0.5,
                              rebuild=False)
-        self.last_room = room
+        self.上个房间 = 门牌号
 
-    def swipe_left(self, right_swipe, w, h):
-        for _ in range(right_swipe):
-            self.swipe_only((w // 2, h // 2), (w // 2, 0), interval=0.5)
+    def 左移(self, 滑动次数, 水平距离, 竖直距离):
+        for 滑动 in range(滑动次数):
+            self.swipe_only((水平距离 // 2, 竖直距离 // 2), (水平距离 // 2, 0), interval=0.5)
         return 0
 
     @push_operators
-    def 撤下干员(self, room, read_time_index=None):
-        if read_time_index is None:
-            read_time_index = []
-        error_count = 0
+    def 撤下干员(self, 门牌号, 读取时间参数=None):
+        if 读取时间参数 is None:
+            读取时间参数 = []
+        场合报错 = 0
         while self.find('room_detail') is None:
-            if error_count > 3:
-                raise Exception('未成功进入房间')
-            self.tap((self.recog.w // 20, self.recog.h * 2 // 5), interval=0.5)
-            error_count += 1
-        length = len(self.plan[room])
-        if length > 3: self.swipe((self.recog.w * 4 // 5, self.recog.h // 2), (0, self.recog.h * 9 // 20), duration=500,
-                                  interval=1,
-                                  rebuild=True)
-        name_p = [((self.recog.w * 1460 // 1920, self.recog.h * 155 // 1080),
-                   (self.recog.w * 1700 // 1920, self.recog.h * 210 // 1080)),
-                  ((self.recog.w * 1460 // 1920, self.recog.h * 370 // 1080),
-                   (self.recog.w * 1700 // 1920, self.recog.h * 420 // 1080)),
-                  ((self.recog.w * 1460 // 1920, self.recog.h * 585 // 1080),
-                   (self.recog.w * 1700 // 1920, self.recog.h * 630 // 1080)),
-                  ((self.recog.w * 1460 // 1920, self.recog.h * 560 // 1080),
-                   (self.recog.w * 1700 // 1920, self.recog.h * 610 // 1080)),
-                  ((self.recog.w * 1460 // 1920, self.recog.h * 775 // 1080),
-                   (self.recog.w * 1700 // 1920, self.recog.h * 820 // 1080))]
-        result = []
-        swiped = False
+            while self.scene() == 9:
+                time.sleep(1)
+                self.recog.update()
+            if self.find('control_central') is None:
+                self.tap((self.recog.w // 20, self.recog.h * 2 // 5), interval=0.5)
+            else:
+                self.进入房间(门牌号)
+            if 场合报错 > 5:    raise Exception('未成功进入进驻信息界面')
+            场合报错 += 1
+        length = len(self.plan[门牌号])
+        if length > 3:
+            self.swipe((self.recog.w * 4 // 5, self.recog.h // 2), (0, self.recog.h * 9 // 20), duration=500,
+                       interval=1, rebuild=True)
+        名字位置 = [((self.recog.w * 1460 // 1920, self.recog.h * 155 // 1080),
+                     (self.recog.w * 1700 // 1920, self.recog.h * 210 // 1080)),
+                    ((self.recog.w * 1460 // 1920, self.recog.h * 370 // 1080),
+                     (self.recog.w * 1700 // 1920, self.recog.h * 420 // 1080)),
+                    ((self.recog.w * 1460 // 1920, self.recog.h * 585 // 1080),
+                     (self.recog.w * 1700 // 1920, self.recog.h * 630 // 1080)),
+                    ((self.recog.w * 1460 // 1920, self.recog.h * 560 // 1080),
+                     (self.recog.w * 1700 // 1920, self.recog.h * 610 // 1080)),
+                    ((self.recog.w * 1460 // 1920, self.recog.h * 775 // 1080),
+                     (self.recog.w * 1700 // 1920, self.recog.h * 820 // 1080))]
+        结果 = []
+        滑动后 = False
         for i in range(0, length):
-            if i >= 3 and not swiped:
+            if i >= 3 and not 滑动后:
                 self.swipe((self.recog.w * 4 // 5, self.recog.h // 2), (0, -self.recog.h * 9 // 20), duration=500,
                            interval=1, rebuild=True)
-                swiped = True
-            data = {}
-            _name = self.read_screen(self.recog.img[name_p[i][0][1]:name_p[i][1][1], name_p[i][0][0]:name_p[i][1][0]],
-                                     type="name")
-            error_count = 0
-            while i >= 3 and _name != '' and (
-                    next((e for e in result if e['agent'] == _name), None)) is not None:
+                滑动后 = True
+            数据 = {}
+            读取到的干员名 = self.读取屏幕(
+                self.recog.img[名字位置[i][0][1]:名字位置[i][1][1], 名字位置[i][0][0]:名字位置[i][1][0]], 模式="名字")
+            场合报错 = 0
+            while i >= 3 and 读取到的干员名 != '' and (
+                    next((e for e in 结果 if e['agent'] == 读取到的干员名), None)) is not None:
                 logger.warning("检测到滑动可能失败")
                 self.swipe((self.recog.w * 4 // 5, self.recog.h // 2), (0, -self.recog.h * 9 // 20), duration=500,
                            interval=1, rebuild=True)
-                _name = self.read_screen(
-                    self.recog.img[name_p[i][0][1]:name_p[i][1][1], name_p[i][0][0]:name_p[i][1][0]], type="name")
-                error_count += 1
-                if error_count > 1:
+                读取到的干员名 = self.读取屏幕(
+                    self.recog.img[名字位置[i][0][1]:名字位置[i][1][1], 名字位置[i][0][0]:名字位置[i][1][0]],
+                    模式="名字")
+                场合报错 += 1
+                if 场合报错 > 1:
                     raise Exception("超过出错上限")
             # 如果房间不为空
-            if _name != '':
-                if _name not in self.干员信息.operators.keys() and _name in agent_list:
-                    self.干员信息.add(Operator(_name, ""))
-                update_time = False
-                if self.干员信息.operators[_name].need_to_refresh(r=room):
-                    update_time = True
-                high_no_time = self.干员信息.update_detail(_name, 24, room, i, update_time)
-                data['depletion_rate'] = self.干员信息.operators[_name].depletion_rate
-            data['agent'] = _name
-            if i in read_time_index:
-                data['time'] = datetime.now()
-                self.干员信息.refresh_dorm_time(room, i, data)
-                logger.debug(f"停止记录时间:{str(data)}")
-            result.append(data)
+            if 读取到的干员名 != '':
+                if 读取到的干员名 not in self.干员信息.operators.keys() and 读取到的干员名 in agent_list:
+                    self.干员信息.add(Operator(读取到的干员名, ""))
+                更新时间 = False
+                if self.干员信息.operators[读取到的干员名].need_to_refresh(r=门牌号):
+                    更新时间 = True
+                high_no_time = self.干员信息.update_detail(读取到的干员名, 24, 门牌号, i, 更新时间)
+                数据['depletion_rate'] = self.干员信息.operators[读取到的干员名].depletion_rate
+            数据['agent'] = 读取到的干员名
+            if i in 读取时间参数:
+                数据['time'] = datetime.now()
+                self.干员信息.refresh_dorm_time(门牌号, i, 数据)
+                logger.debug(f"停止记录时间:{str(数据)}")
+            结果.append(数据)
         撤下干员名单 = '撤下'
         for _operator in self.干员信息.operators.keys():
-            if self.干员信息.operators[_operator].current_room == room and _operator not in [res['agent'] for res in
-                                                                                             result]:
+            if (self.干员信息.operators[_operator].current_room == 门牌号
+                    and _operator not in [res['agent'] for res in 结果]):
                 self.干员信息.operators[_operator].current_room = ''
                 self.干员信息.operators[_operator].current_index = -1
                 if 撤下干员名单 == '撤下':
@@ -1018,107 +1436,88 @@ class 项目经理(BaseSolver):
                 撤下干员名单 += _operator
         if not 撤下干员名单 == '撤下':
             logger.info(撤下干员名单)
-        return result
+        return 结果
 
-    def refresh_current_room(self, room):
-        _current_room = self.干员信息.get_current_room(room)
-        if _current_room is None:
-            self.撤下干员(room)
-            _current_room = self.干员信息.get_current_room(room, True)
-        return _current_room
+    def 刷新当前房间干员列表(self, 门牌号):
+        _当前房间干员列表 = self.干员信息.get_current_room(门牌号)
+        if _当前房间干员列表 is None:
+            self.撤下干员(门牌号)
+            _当前房间干员列表 = self.干员信息.get_current_room(门牌号, True)
+        return _当前房间干员列表
 
-    def 跑单(self, plan: tp.BasePlan, get_time=False):
-        rooms = list(plan.keys())
-        new_plan = {}
+    def 检查换人情况(self, 房间, 任务列表, 获取时间=False):
+        读取时间参数 = []
+        if 获取时间:
+            读取时间参数 = self.干员信息.get_refresh_index(房间, 任务列表[房间])
+        当前房间干员列表 = self.撤下干员(房间, 读取时间参数)
+        for 序号, 干员名 in enumerate(任务列表[房间]):
+            if 当前房间干员列表[序号]['agent'] != 干员名:
+                logger.error(f'检测到的干员{当前房间干员列表[序号]["agent"]},需要上岗的干员{干员名}')
+                raise Exception('检测到安排干员未成功')
+
+    def 跑单(self, 任务列表: tp.BasePlan, 获取时间=False):
+        global 上次跑单时间
+        任务房间列表 = list(任务列表.keys())
+        换回上班干员任务 = {}
         # 优先替换工作站再替换宿舍
-        rooms.sort(key=lambda x: x.startswith('dorm'), reverse=False)
-        for room in rooms:
-            finished = False
-            choose_error = 0
-            while not finished:
+        任务房间列表.sort(key=lambda x: x.startswith('dorm'), reverse=False)
+        for 房间 in 任务房间列表:
+            跑单干员已进驻 = False
+            干员选择报错 = 0
+            while not 跑单干员已进驻:
                 try:
-                    error_count = 0
-                    self.进入房间(room)
+                    场合报错 = 0
+                    self.进入房间(房间)
                     while self.find('room_detail') is None:
-                        if error_count > 3:
-                            raise Exception('未成功进入房间')
-                        self.tap((self.recog.w // 20, self.recog.h * 2 // 5), interval=0.5)
-                        error_count += 1
-                    error_count = 0
-                    if choose_error == 0:
-                        if '但书' in plan[room] or '龙舌兰' in plan[room]:
-                            new_plan[room] = self.refresh_current_room(room)
-                        if 'Current' in plan[room]:
-                            self.refresh_current_room(room)
-                            for current_idx, _name in enumerate(plan[room]):
-                                if _name == 'Current':
-                                    plan[room][current_idx] = self.干员信息.get_current_room(room, True)[current_idx]
-                        if room in self.run_order_rooms and len(new_plan) == 0:
-                            if ('plan' in self.run_order_rooms[room] and
-                                    plan[room] != self.run_order_rooms[room]['plan']):
-                                run_order_task = self.find_next_task(
+                        while self.scene() == 9:
+                            time.sleep(1)
+                            self.recog.update()
+                        if self.find('control_central') is None:
+                            self.tap((self.recog.w // 20, self.recog.h * 2 // 5), interval=0.5)
+                        else:
+                            self.进入房间(房间)
+                        if 场合报错 > 5:    raise Exception('未成功进入进驻信息界面')
+                        场合报错 += 1
+                    if 干员选择报错 == 0:
+                        if '但书' in 任务列表[房间] or '龙舌兰' in 任务列表[房间]:
+                            换回上班干员任务[房间] = self.刷新当前房间干员列表(房间)
+                        if 'Current' in 任务列表[房间]:
+                            self.刷新当前房间干员列表(房间)
+                            for 序号, _当前干员名 in enumerate(任务列表[房间]):
+                                if _当前干员名 == 'Current':
+                                    任务列表[房间][序号] = self.干员信息.get_current_room(房间, True)[序号]
+                        if 房间 in self.run_order_rooms and len(换回上班干员任务) == 0:
+                            if ('plan' in self.run_order_rooms[房间] and
+                                    任务列表[房间] != self.run_order_rooms[房间]['plan']):
+                                跑单任务 = self.find_next_task(
                                     compare_time=datetime.now() + timedelta(minutes=10),
-                                    task_type=room, compare_type=">")
-                                if run_order_task is not None:
+                                    task_type=房间, compare_type=">")
+                                if 跑单任务 is not None:
                                     logger.info("检测到跑单房间人员变动！")
-                                    self.任务列表.remove(run_order_task)
-                                    del self.run_order_rooms[room]['plan']
+                                    self.任务列表.remove(跑单任务)
+                                    del self.run_order_rooms[房间]['plan']
                     while self.find('arrange_order_options') is None:
-                        if error_count > 3:
+                        if 场合报错 > 5:
                             raise Exception('未成功进入干员选择界面')
                         self.tap((self.recog.w * 41 // 50, self.recog.h // 5), interval=1)
-                        error_count += 1
-                    self.换上干员(plan[room], room)
+                        场合报错 += 1
+                    self.换上干员(任务列表[房间], 房间)
                     self.recog.update()
-                    if room.startswith('room'):
-                        龙舌兰_但书进驻前的等待时间 = round(((self.任务列表[0].time - datetime.now()).total_seconds() +
-                                                             self.跑单提前运行时间 - self.更换干员前缓冲时间), 1)
+                    if 房间.startswith('room') and 用户配置['跑单消耗无人机开关'] == '关':
+                        龙舌兰_但书进驻前的等待时间 = round(((self.任务列表[0].time - datetime.now()).total_seconds()
+                                                             + self.跑单提前运行时间 - self.更换干员前缓冲时间), 1)
                         if 龙舌兰_但书进驻前的等待时间 > 0:
                             logger.info(f'龙舌兰、但书进驻前等待 {str(龙舌兰_但书进驻前的等待时间)} 秒')
                             time.sleep(龙舌兰_但书进驻前的等待时间)
                     self.tap_element('confirm_blue', detected=True, judge=False, interval=3)
                     self.recog.update()
                     if self.get_infra_scene() == 206:
-                        x0 = self.recog.w * 2 // 3  # double confirm
-                        y0 = self.recog.h - 10
-                        self.tap((x0, y0), rebuild=True)
-                    read_time_index = []
-                    if get_time:
-                        read_time_index = self.干员信息.get_refresh_index(room, plan[room])
-                    current = self.撤下干员(room, read_time_index)
-                    for idx, name in enumerate(plan[room]):
-                        if current[idx]['agent'] != name:
-                            logger.error(f'检测到的干员{current[idx]["agent"]},需要上岗的干员{name}')
-                            raise Exception('检测到安排干员未成功')
-                    finished = True
-                    # 如果完成则移除该任务
-                    del plan[room]
-                    if room.startswith('room'):
-                        # 截图
-                        while self.find('bill_accelerate') is None:
-                            if error_count > 5:
-                                raise Exception('未成功进入订单界面')
-                            self.tap((self.recog.w * 0.05, self.recog.h * 0.95), interval=1)
-                            error_count += 1
-                        修正后的接单时间 = self.double_read_time(
-                            (self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
-                             self.recog.w * 815 // 2496, self.recog.h * 710 // 1404),
-                            use_digit_reader=True)
-                        截图等待时间 = round((修正后的接单时间 - datetime.now()).total_seconds(), 1)
-                        if (截图等待时间 > 0) and (截图等待时间 < 1000):
-                            logger.info(
-                                f'房间 B{room[5]}0{room[7]} 修正后的接单时间为 {修正后的接单时间.strftime("%H:%M:%S")}')
-                            logger.info(f'等待截图时间为 {str(截图等待时间)} 秒')
-                            time.sleep(截图等待时间)
-                            logger.info('保存截图')
-                            self.recog.update()
-                            self.recog.save_screencap('run_order')
-                    while self.scene() == 9:
-                        time.sleep(1)
-                        self.recog.update()
+                        self.tap((self.recog.w * 2 // 3, self.recog.h - 10), rebuild=True)
+                    self.检查换人情况(房间, 任务列表, 获取时间)
+                    跑单干员已进驻 = True
                 except Exception as e:
                     logger.exception(e)
-                    choose_error += 1
+                    干员选择报错 += 1
                     self.recog.update()
                     back_count = 0
                     while self.get_infra_scene() != 201:
@@ -1127,30 +1526,109 @@ class 项目经理(BaseSolver):
                         back_count += 1
                         if back_count > 3:
                             raise e
-                    if choose_error > 3:
+                    if 干员选择报错 > 3:
                         raise e
                     else:
                         continue
-            self.back(0.5)
-        if len(new_plan) == 1 and self.任务列表[0].type.startswith('room'):
-            # 防止由于意外导致的死循环
-            run_order_room = next(iter(new_plan))
-            if '但书' in new_plan[run_order_room] or '龙舌兰' in new_plan[run_order_room]:
-                new_plan[run_order_room] = [data["agent"] for data in self.plan[room]]
-            # 返回基建主界面
-            self.recog.update()
-            self.返回基建主界面()
-            self.任务列表.append(SchedulerTask(time=self.任务列表[0].time, task_plan=new_plan))
+            上次跑单时间 = self.任务列表[0].time
+            del 任务列表[房间]  # 如果完成则移除该任务
+            if 房间.startswith('room'):
+                场合报错 = 0
+                while self.find('bill_accelerate') is None:
+                    if 场合报错 > 5:
+                        raise Exception('未成功进入订单界面')
+                    self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=1)
+                    场合报错 += 1
+
+                修正后的接单时间 = self.统合读取时间(
+                    (self.recog.w * 650 // 2496, self.recog.h * 660 // 1404,
+                     self.recog.w * 815 // 2496, self.recog.h * 710 // 1404), 读数器=True)
+                等待时间 = round((修正后的接单时间 - datetime.now()).total_seconds(), 1)
+                if (等待时间 > 0) and (等待时间 < self.跑单提前运行时间 * 2):
+                    try:
+                        if 用户配置['跑单消耗无人机开关'] == '关':
+                            logger.info(
+                                f'房间 B{房间[5]}0{房间[7]} 修正后的接单时间为 {修正后的接单时间.strftime("%H:%M:%S")}')
+                            logger.info(f'等待截图时间为 {str(等待时间)} 秒')
+                            time.sleep(等待时间)
+                        else:
+                            self.无人机协助跑单()
+                        self.recog.update()
+                        while (self.find(
+                                "order_ready", scope=((self.recog.w * 450 // 1920, self.recog.h * 675 // 1080),
+                                                      (self.recog.w * 600 // 1920, self.recog.h * 750 // 1080)))
+                               is None):
+                            time.sleep(1)
+                            logger.info('等待截图时间 +1秒')
+                            self.recog.update()
+                        logger.info('跑单成功')
+                    except Exception as e:
+                        logger.exception(e)
+                else:
+                    logger.debug('检测到漏单！')
+                logger.info('保存截图')
+                if self.get_infra_scene() == 9:
+                    if not self.waiting_solver(9, sleep_time=2):
+                        return
+                self.recog.save_screencap('run_order')
+            while self.scene() == 9:
+                time.sleep(1)
+                self.recog.update()
+
+            if len(换回上班干员任务) == 1 and self.任务列表[0].type.startswith('room'):
+                # 防止由于意外导致的死循环
+                跑单房间 = next(iter(换回上班干员任务))
+                if '但书' in 换回上班干员任务[跑单房间] or '龙舌兰' in 换回上班干员任务[跑单房间]:
+                    换回上班干员任务[跑单房间] = [data["agent"] for data in self.plan[房间]]
+
+                # 换回上班的干员
+                场合报错 = 0
+                while self.find('arrange_order_options') is None:
+                    if 场合报错 > 5:
+                        raise Exception('未成功进入干员选择界面')
+                    self.tap((self.recog.w // 4, self.recog.h * 9 // 10), interval=1)
+                    场合报错 += 1
+                self.换上干员(换回上班干员任务[房间], 房间)
+                self.recog.update()
+                self.tap_element('confirm_blue', detected=True, judge=False, interval=3)
+                self.recog.update()
+                if self.get_infra_scene() == 206:   self.tap((self.recog.w * 2 // 3, self.recog.h - 10), rebuild=True)
+                logger.info("订单交付")
+                self.tap((self.recog.w // 4, self.recog.h // 4), interval=1)
+                self.back(interval=2)
+                场合报错 = 0
+                while self.find('room_detail') is None:
+                    while self.scene() == 9:
+                        time.sleep(1)
+                        self.recog.update()
+                    if self.find('control_central') is None:
+                        self.tap((self.recog.w // 20, self.recog.h * 2 // 5), interval=0.5)
+                    else:
+                        self.进入房间(房间)
+                    if 场合报错 > 5:    raise Exception('未成功进入进驻信息界面')
+                    场合报错 += 1
+                self.检查换人情况(房间, 换回上班干员任务, 获取时间)
+
+                # 提交读取新一单接单时间的任务
+                下次跑单任务 = {房间: ['Current'] * len(self.plan[房间])}
+                for 序号, 位置 in enumerate(self.plan[房间]):
+                    if '但书' in 位置['replacement'] or '龙舌兰' in 位置['replacement']:
+                        下次跑单任务[房间][序号] = 位置['replacement'][0]
+                self.任务列表.append(
+                    SchedulerTask(time=self.读取接单时间(房间), task_plan=下次跑单任务, task_type=房间))
+                self.返回基建主界面()
+
             if 龙舌兰和但书休息:
                 宿舍 = {}
                 宿舍[龙舌兰和但书休息宿舍] = [data["agent"] for data in self.plan[龙舌兰和但书休息宿舍]]
+                self.进入房间(龙舌兰和但书休息宿舍)
                 self.任务列表.append(SchedulerTask(time=self.任务列表[0].time, task_plan=宿舍))
-                self.skip(['planned', 'todo_task'])
+                self.跳过(['planned', 'todo_task'])
 
-    def skip(self, task_names='All'):
-        if task_names == 'All':
-            task_names = ['planned', 'collect_notification', 'todo_task']
-        if 'planned' in task_names:
+    def 跳过(self, 任务种类='All'):
+        if 任务种类 == 'All':
+            任务种类 = ['planned', 'collect_notification', 'todo_task']
+        if 'planned' in 任务种类:
             self.planned = True
         if 'todo_task':
             self.todo_task = True
@@ -1158,12 +1636,20 @@ class 项目经理(BaseSolver):
             self.collect_notification = True
 
     @CFUNCTYPE(None, c_int, c_char_p, c_void_p)
-    def log_maa(msg, details, arg):
-        m = Message(msg)
-        d = json.loads(details.decode('utf-8'))
-        logger.debug(d)
-        logger.debug(m)
+    def MAA日志(MAA日志, details, arg):
+        日志 = Message(MAA日志)
+        日志内容 = json.loads(details.decode('utf-8'))
+        logger.debug(日志内容)
+        logger.debug(日志)
         logger.debug(arg)
+        if "what" in 日志内容 and 日志内容["what"] == "StageDrops":
+            global 关卡掉落
+            关卡掉落["details"].append(日志内容["details"]["drops"])
+            关卡掉落["summary"] = 日志内容["details"]["stats"]
+            for 种类 in 日志内容["details"]["drops"]:
+                物品名称 = 种类["itemName"]
+                物品数量 = 种类["quantity"]
+                logger.info(f"关卡掉落: {物品名称} × {物品数量}")
 
     def MAA初始化(self):
         asst_path = os.path.dirname(pathlib.Path(self.MAA设置['MAA路径']) / "Python" / "asst")
@@ -1175,7 +1661,7 @@ class 项目经理(BaseSolver):
         from asst.utils import Message
 
         Asst.load(path=self.MAA设置['MAA路径'])
-        self.MAA = Asst(callback=self.log_maa)
+        self.MAA = Asst(callback=self.MAA日志)
         self.关卡列表 = []
         if self.MAA.connect(self.MAA设置['MAA_adb路径'], self.device.client.device_id):
             logger.info("MAA 连接成功")
@@ -1224,48 +1710,20 @@ class 项目经理(BaseSolver):
         #         'credit_fight': credit_fight
         #     })
 
-    def maa_plan_solver(self, 任务列表=['Fight'], one_time=False):
+    def MAA任务调度器(self, 任务列表=['Fight'], 首次=False):
         try:
-            self.send_email('启动MAA')
+            self.发送邮件('启动MAA')
             self.back_to_index()
             # 任务及参数请参考 docs/集成文档.md
             self.MAA初始化()
             if 任务列表 == 'All':
                 任务列表 = ['StartUp', 'Fight', 'Recruit', 'Visit', 'Mall', 'Award']
-            for maa_task in 任务列表:
-                self.添加MAA任务(maa_task)
-            # asst.append_task('Copilot', {
-            #     'stage_name': '千层蛋糕',
-            #     'filename': './GA-EX8-raid.json',
-            #     'formation': False
 
-            # })
-            self.MAA.start()
-            stop_time = None
-            if one_time:
-                stop_time = datetime.now() + timedelta(minutes=5)
-            logger.info(f"MAA 启动")
-            hard_stop = False
-            while self.MAA.running():
-                # 单次任务默认5分钟
-                if one_time and stop_time < datetime.now():
-                    self.MAA.stop()
-                    hard_stop = True
-                # 5分钟之前就停止
-                elif not one_time and (self.任务列表[0].time - datetime.now()).total_seconds() < 300:
-                    self.MAA.stop()
-                    hard_stop = True
-                else:
-                    time.sleep(0)
-            self.send_email('MAA 停止')
-            if hard_stop:
-                logger.info(f"由于 MAA 任务并未完成，等待3分钟重启软件")
-                time.sleep(180)
-                self.device.exit(self.服务器)
             if self.MAA设置['集成战略'] == '开' or self.MAA设置['生息演算'] == '开':
                 while (self.任务列表[0].time - datetime.now()).total_seconds() > 30:
                     self.MAA = None
                     self.MAA初始化()
+                    主题 = str()
                     if self.MAA设置['集成战略'] == '开':
                         if self.MAA设置['集成战略主题'] == '傀影与猩红孤钻':
                             主题 = 'Phantom'
@@ -1274,8 +1732,8 @@ class 项目经理(BaseSolver):
                         elif self.MAA设置['集成战略主题'] == '探索者的银凇止境':
                             主题 = 'Sami'
                         self.MAA.append_task('Roguelike', {
-                            'theme': self.MAA设置['集成战略主题'],
-                            'mode': 主题,
+                            'theme': 主题,
+                            'mode': self.MAA设置['集成战略策略模式'],
                             'starts_count': 9999999,
                             'investment_enabled': True,
                             'investments_count': 9999999,
@@ -1285,7 +1743,7 @@ class 项目经理(BaseSolver):
                             'core_char': self.MAA设置['集成战略开局干员']
                         })
                     elif self.MAA设置['生息演算'] == '开':
-                        self.back_to_MAA设置['生息演算']()
+                        self.back_to_reclamation_algorithm()
                         self.MAA.append_task('ReclamationAlgorithm')
                     # elif self.MAA设置['保全派驻'] :
                     #     self.MAA.append_task('SSSCopilot', {
@@ -1301,8 +1759,49 @@ class 项目经理(BaseSolver):
                         else:
                             time.sleep(0)
                     self.device.exit(self.服务器)
-            # 生息演算逻辑 结束
-            if one_time:
+            else:
+                for MAA任务 in 任务列表:
+                    self.添加MAA任务(MAA任务)
+                # asst.append_task('Copilot', {
+                #     'stage_name': '千层蛋糕',
+                #     'filename': './GA-EX8-raid.json',
+                #     'formation': False
+
+                # })
+                self.MAA.start()
+                MAA停止时间 = None
+                if 首次:
+                    MAA停止时间 = datetime.now() + timedelta(minutes=5)
+                else:
+                    global 关卡掉落
+                    关卡掉落 = {"details": [], "summary": {}}
+                logger.info(f"MAA 启动")
+                强制停止MAA = False
+                while self.MAA.running():
+                    # 单次任务默认5分钟
+                    if 首次 and MAA停止时间 < datetime.now():
+                        self.MAA.stop()
+                        强制停止MAA = True
+                    # 5分钟之前就停止
+                    elif not 首次 and (self.任务列表[0].time - datetime.now()).total_seconds() < 300:
+                        self.MAA.stop()
+                        强制停止MAA = True
+                    else:
+                        time.sleep(0)
+                self.发送邮件('MAA 停止')
+                if 强制停止MAA:
+                    logger.info(f"MAA 任务未完成，等待3分钟重启软件")
+                    time.sleep(180)
+                    self.device.exit(self.服务器)
+                elif not 首次:
+                    logger.info(f"记录 MAA 本次执行时间:{datetime.now()}")
+                    # 有掉落东西再发
+                    if 关卡掉落["details"]:
+                        self.发送邮件(maa_template.render(stage_drop=关卡掉落), "Maa停止")
+                else:
+                    self.发送邮件("Maa单次任务停止")
+
+            if 首次:
                 if len(self.任务列表) > 0:
                     del self.任务列表[0]
                 self.MAA = None
@@ -1310,62 +1809,59 @@ class 项目经理(BaseSolver):
                     # 未来10分钟没有任务就新建
                     self.任务列表.append(SchedulerTask())
                 return
-            remaining_time = (self.任务列表[0].time - datetime.now()).total_seconds()
-            subject = f"开始休息 {'%.2f' % (remaining_time / 60)} 分钟，到{self.任务列表[0].time.strftime('%H:%M:%S')}"
-            context = f"下一次任务:{self.任务列表[0].plan if len(self.任务列表[0].plan) != 0 else '空任务' if self.任务列表[0].type == '' else self.任务列表[0].type}"
-            logger.info(context)
-            logger.info(subject)
-            self.send_email(context, subject)
-            if remaining_time > 0:
-                time.sleep(remaining_time)
+            任务倒计时 = (下个任务开始时间 - datetime.now()).total_seconds()
+            if 任务倒计时 > 0:
+                logger.info(f"休息{int(任务倒计时 / 60)}分钟，到{下个任务开始时间}")
+                time.sleep(任务倒计时)
             self.MAA = None
         except Exception as e:
             logger.error(e)
             self.MAA = None
-            remaining_time = (self.任务列表[0].time - datetime.now()).total_seconds()
-            if remaining_time > 0:
-                logger.info(
-                    f"开始休息 {'%.2f' % (remaining_time / 60)} 分钟，到{self.任务列表[0].time.strftime('%H:%M:%S')}")
-                time.sleep(remaining_time)
             self.device.exit(self.服务器)
+            任务倒计时 = (下个任务开始时间 - datetime.now()).total_seconds()
+            if 任务倒计时 > 0:
+                logger.info(f"休息{int(任务倒计时 / 60)}分钟，到{下个任务开始时间}")
+                time.sleep(任务倒计时)
 
-    def send_email(self, context=None, subject='', retry_time=3):
+    def 发送邮件(self, 内容=None, 主题='', 重试次数=3):
         global 任务
         if not self.邮件设置['邮件提醒开关'] == '开':
             logger.info('邮件功能未开启')
             return
-        while retry_time > 0:
+        while 重试次数 > 0:
             try:
-                msg = MIMEMultipart()
-                if context is None:
-                    context = """
+                邮件 = MIMEMultipart()
+                if 内容 is None:
+                    内容 = """
                     <html>
                         <body>
                         <table border="1">
                         <tr><th>时间</th><th>房间</th></tr>                    
                     """
                     for 任务 in self.任务列表:
-                        context += f"""
+                        内容 += f"""
                                         <tr><td>{任务.time.strftime('%Y-%m-%d %H:%M:%S')}</td>
                                         <td>B{任务.type[5]}0{任务.type[7]}</td></tr>    
                                     """
-                    context += "</table></body></html>"
-                    msg.attach(MIMEText(context, 'html'))
+                    内容 += "</table></body></html>"
+                    内容 += _信息内容
+                    邮件.attach(MIMEText(内容, 'html'))
                 else:
-                    msg.attach(MIMEText(str(context), 'plain', 'utf-8'))
-                msg['Subject'] = ('将在 ' + self.任务列表[0].time.strftime('%H:%M:%S') +
-                                  ' 于房间 B' + self.任务列表[0].type[5] + '0' + self.任务列表[0].type[7] + ' 进行跑单')
-                msg['From'] = self.邮件设置['发信邮箱']
-                s = smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10.0)
+                    邮件.attach(MIMEText(str(内容), 'plain', 'utf-8'))
+                邮件['Subject'] = ('将在 ' + self.任务列表[0].time.strftime('%H:%M:%S') +
+                                   ' 于房间 B' + self.任务列表[0].type[5] + '0' + self.任务列表[0].type[
+                                       7] + ' 进行跑单')
+                邮件['From'] = self.邮件设置['发信邮箱']
+                邮箱 = smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10.0)
                 # 登录邮箱
-                s.login(self.邮件设置['发信邮箱'], self.邮件设置['授权码'])
+                邮箱.login(self.邮件设置['发信邮箱'], self.邮件设置['授权码'])
                 # 开始发送
-                s.sendmail(self.邮件设置['发信邮箱'], self.邮件设置['收件人邮箱'], msg.as_string())
+                邮箱.sendmail(self.邮件设置['发信邮箱'], self.邮件设置['收件人邮箱'], 邮件.as_string())
                 break
             except Exception as e:
                 logger.error("邮件发送失败")
                 logger.exception(e)
-                retry_time -= 1
+                重试次数 -= 1
                 time.sleep(1)
 
 
@@ -1383,7 +1879,7 @@ def 初始化(任务列表, scheduler=None):
         if 当前项目.recog.w * 9 != 当前项目.recog.h * 16:
             logger.error('请将模拟器分辨率设置为 16:9 再重新运行 Mower0!')
             托盘图标.notify('请将模拟器分辨率设置为 16:9 \n再重新运行 Mower0!', "分辨率检验")
-            退出程序()
+            停止运行Mower0()
         当前项目.服务器 = 服务器
         当前项目.operators = {}
         当前项目.plan = {}
@@ -1406,7 +1902,7 @@ def 初始化(任务列表, scheduler=None):
                     if 干员 == '自动填充干员':  干员 = 'Free'
                     当前项目.plan[龙舌兰和但书休息宿舍].append({'agent': 干员, 'group': '', 'replacement': ''})
         当前项目.任务列表 = 任务列表
-        当前项目.last_room = ''
+        当前项目.上个房间 = ''
         当前项目.MAA = None
         当前项目.邮件设置 = 邮件设置
         当前项目.ADB_CONNECT = config.ADB_CONNECT[0]
@@ -1424,8 +1920,8 @@ def 初始化(任务列表, scheduler=None):
 
 class 线程(threading.Thread):
 
-    def __init__(self, *args, **kwargs):
-        super(线程, self).__init__(*args, **kwargs)
+    def __init__(self, dae=False, *args, **kwargs):
+        super(线程, self).__init__(daemon=dae, *args, **kwargs)
         self._stop_event = threading.Event()
 
     def run(self):
@@ -1441,10 +1937,13 @@ class 线程(threading.Thread):
         重连次数上限 = 10
         重连次数 = 0
         当前项目 = 初始化(任务列表)
-        if 用户配置['森空岛签到开关'] == '开':
-            森空岛签到()
+        if 签到:
+            try:
+                森空岛签到()
+            except:
+                pass
         当前项目.device.launch(f"{服务器}/{config.APP_ACTIVITY_NAME}")
-        当前项目.initialize_operators()
+        当前项目.干员信息初始化()
         while True:
             try:
                 if len(当前项目.任务列表) > 0:
@@ -1453,46 +1952,62 @@ class 线程(threading.Thread):
                     if (len(任务列表) > 1 and (任务列表[0].time - datetime.now()).total_seconds()
                             > 当前项目.跑单提前运行时间 > (任务列表[1].time - 任务列表[0].time).total_seconds()):
                         logger.warning("两个订单时间太接近了，准备用无人机加速拉开订单间时间差距")
-                        当前项目.无人机加速(任务列表[0].type, True, True)
+                        当前项目.无人机加速拉开订单间时间差距(任务列表[0].type, True, True)
                     下个任务开始时间 = 任务列表[0].time
                     当前项目.recog.update()
                     当前项目.返回基建主界面()
                     任务间隔 = (当前项目.任务列表[0].time - datetime.now()).total_seconds()
                     if 任务间隔 > 0:
-                        当前项目.send_email()
+                        try:
+                            if 森空岛小秘书:  森空岛查看游戏内信息()
+                            if 签到 and 已签到日期 != datetime.now().strftime('%Y年%m月%d日'):    森空岛签到()
+                        except:
+                            pass
+                        当前项目.发送邮件()
                         任务提示 = str()
-                        for i in range(len(任务列表)):
-                            logger.warning(
-                                f'房间 B{任务列表[i].type[5]}0{任务列表[i].type[7]} 开始跑单的时间为 {任务列表[i].time.strftime("%H:%M:%S")}')
+                        for i in range(len(任务列表)):  logger.warning(
+                            f'房间 B{任务列表[i].type[5]}0{任务列表[i].type[7]} 开始跑单的时间为 {任务列表[i].time.strftime("%H:%M:%S")}')
                         无人机数量 = 当前项目.digit_reader.get_drone(当前项目.recog.gray, 当前项目.recog.h,
                                                                      当前项目.recog.w)
-                        if 无人机数量 > 168:
+                        if 无人机数量 > 160:
                             logger.warning(f'现在有 {无人机数量} 个无人机，请尽快使用，避免溢出！')
                             任务提示 += f'现在有 {无人机数量} 个无人机，请尽快使用！\n'
                         for i in range(len(任务列表)):
                             任务提示 += f'房间 B{任务列表[i].type[5]}0{任务列表[i].type[7]} 开始跑单的时间为 {任务列表[i].time.strftime("%H:%M:%S")}\n'
-                        if 弹窗提醒开关:    托盘图标.notify(任务提示, "Mower0跑单提醒")
 
-                    # 如果有高强度重复MAA任务,任务间隔超过10分钟则启动MAA
-                    if MAA设置['作战开关'] == '开' and (任务间隔 > 600):
-                        当前项目.maa_plan_solver()
-                    elif 任务间隔 > 0:
-                        if 用户配置['任务结束后退出游戏'] == '是' and 任务间隔 > 跑单提前运行时间:
-                            当前项目.device.exit(当前项目.服务器)
-                            if 用户配置['森空岛签到开关'] == '开' and 已签到日期 != datetime.now().strftime('%Y年%m月%d日'):
-                                森空岛签到()
-                            time.sleep(任务间隔 - 跑单提前运行时间)
-                            if 弹窗提醒开关:
+                        # 如果有高强度重复MAA任务,任务间隔超过10分钟则启动MAA
+                        if MAA设置['作战开关'] == '开' and (任务间隔 > 600):
+                            当前项目.MAA任务调度器()
+                        else:
+                            if 用户配置['任务结束后退出游戏'] == '是' and 任务间隔 > 跑单提前运行时间:
+                                当前项目.device.exit(当前项目.服务器)
+                            else:
+                                当前项目.back_to_index()
+                            if 森空岛小秘书:
+                                if 任务间隔 > 跑单提前运行时间 + 360:
+                                    while (当前项目.任务列表[
+                                               0].time - datetime.now()).total_seconds() > 2 * 跑单提前运行时间 + 360:
+                                        try:
+                                            time.sleep(360)
+                                            森空岛获取信息()
+                                            if json.load(open('森空岛数据.json'))['data']['building']['labor'][
+                                                'lastUpdateTime'] > 上次跑单时间.timestamp():  森空岛实时数据分析()
+                                        except:
+                                            pass
+                                time.sleep(
+                                    max((当前项目.任务列表[0].time - datetime.now()).total_seconds() - 跑单提前运行时间,
+                                        0))
+                            else:
+                                time.sleep(max(任务间隔 - 跑单提前运行时间, 0))
+                            if 弹窗提醒:
                                 托盘图标.notify("跑单时间快到了喔，请放下游戏中正在做的事，或者手动关闭Mower0",
                                                 "Mower0跑单提醒")
                             time.sleep(跑单提前运行时间)
-                            if 弹窗提醒开关:    托盘图标.notify("开始跑单！", "Mower0跑单提醒")
-                        else:
-                            time.sleep(任务间隔)
-                            当前项目.back_to_index()
+                            if 弹窗提醒:    托盘图标.notify("开始跑单！", "Mower0跑单提醒")
+                    当前项目.device.launch(f"{服务器}/{config.APP_ACTIVITY_NAME}")
 
                 if len(当前项目.任务列表) > 0 and 当前项目.任务列表[0].type.split('_')[0] == 'maa':
-                    当前项目.maa_plan_solver((当前项目.任务列表[0].type.split('_')[1]).split(','), one_time=True)
+                    当前项目.MAA任务调度器((当前项目.任务列表[0].type.split('_')[1]).split(','), 首次=True)
                     continue
                 当前项目.run()
                 重连次数 = 0
@@ -1564,6 +2079,11 @@ def 跑单任务查询(icon: pystray.Icon):
     icon.notify(任务提示, "Mower0跑单任务列表")
 
 
+def 森空岛查看游戏内信息():
+    输出信息, 已输出 = 森空岛实时数据分析()
+    if not 已输出: print(输出信息)
+
+
 def 重新运行Mower0():
     global Mower0
     try:
@@ -1582,7 +2102,7 @@ def 停止运行Mower0():
     logger.warning('Mower0已停止')
 
 
-def 退出程序():
+def 退出Mower0():
     pid = os.getpid()  # 获取当前进程ID
     logger.error('退出 Mower0')
     os.system('taskkill -f -pid %s' % pid)
@@ -1596,17 +2116,23 @@ def 更新字幕():
         字幕 = f'Mower0将在{int(任务倒计时 / 60)}分钟后开始跑单'
         if 任务倒计时 <= 跑单提前运行时间:
             字幕 += '\n跑单即将开始！'
-    label.config(text=字幕, font=(用户配置['字幕字体'], 字幕字号, 'bold'), bg=字幕颜色,
-                 fg=字幕颜色[:6] + str(int(字幕颜色[5] == '0')))
+    悬浮字幕.config(text=字幕, font=(用户配置['字幕字体'], 字幕字号, 'bold'), bg=字幕颜色,
+                    fg=字幕颜色[:6] + str(int(字幕颜色[5] == '0')))
     窗口.after(100, 更新字幕)
 
 
 托盘菜单 = (MenuItem(任务提示, 跑单任务查询, default=True, visible=False),
             MenuItem('显示字幕', 显示字幕, visible=悬浮字幕开关),
+            Menu.SEPARATOR,
+            MenuItem('森空岛签到', 森空岛签到, visible=签到),
+            MenuItem('森空岛查看游戏内信息', 森空岛查看游戏内信息, visible=森空岛小秘书),
+            MenuItem('森空岛干员阵容查询', 森空岛干员阵容查询, visible=森空岛小秘书),
+            Menu.SEPARATOR,
             MenuItem('重新运行Mower0', 重新运行Mower0, visible=True),
             MenuItem('停止运行Mower0', 停止运行Mower0, visible=True),
-            Menu.SEPARATOR, MenuItem('退出', 退出程序))
-托盘图标 = pystray.Icon("Mower0 纯跑单", Image.open("logo.png"), "Mower0 纯跑单", 托盘菜单)
+            Menu.SEPARATOR,
+            MenuItem('退出Mower0', 退出Mower0))
+托盘图标 = pystray.Icon("Mower0", Image.open("logo.png"), "Mower0", 托盘菜单)
 if 悬浮字幕开关:
     窗口.geometry("%dx%d+%d+%d" % (窗口宽度, 窗口高度,
                                    (窗口.winfo_screenwidth() - 窗口宽度) / 2,
@@ -1617,12 +2143,12 @@ if 悬浮字幕开关:
     窗口.wm_attributes("-transparentcolor", 字幕颜色)
 
     # 添加一个标签小部件
-    label = Label(窗口)
-    label.pack(side="top", fill="both", expand=True)
-    label.bind("<Button-1>", 选中窗口)
-    label.bind("<B1-Motion>", 拖动窗口)
-    label.bind("<Double-Button-1>", 关闭窗口)
-    label.bind("<MouseWheel>", 缩放字幕)
+    悬浮字幕 = Label(窗口)
+    悬浮字幕.pack(side="top", fill="both", expand=True)
+    悬浮字幕.bind("<Button-1>", 选中窗口)
+    悬浮字幕.bind("<B1-Motion>", 拖动窗口)
+    悬浮字幕.bind("<Double-Button-1>", 关闭窗口)
+    悬浮字幕.bind("<MouseWheel>", 缩放字幕)
 
 if __name__ == "__main__":
     threading.Thread(target=托盘图标.run, daemon=False).start()
