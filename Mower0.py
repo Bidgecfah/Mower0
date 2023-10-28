@@ -62,7 +62,7 @@ ocr = None
 已签到日期 = str()
 关卡掉落 = {}
 
-with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
+with open('Mower1用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
     用户配置 = yaml.load(用户配置文件.read(), Loader=yaml.FullLoader)
 
 服务器 = 'com.hypergryph.arknights'
@@ -228,9 +228,9 @@ def 日志设置():
     config.SCREENSHOT_PATH = 用户配置['截图存储目录']
     config.SCREENSHOT_MAXNUM = 用户配置['每种截图的最大保存数量'] - 1
     config.MAX_RETRYTIME = 10
-    日志全局格式 = '%(blue)s%(asctime)s - %(log_color)s%(funcName)s - %(log_color)s%(message)s'
+    日志全局格式 = '%(blue)s%(asctime)s %(log_color)s%(message)s'
     if 源码日志 == '是':
-        日志全局格式 = '%(blue)s%(asctime)s %(white)s- %(relativepath)s:%(lineno)d - %(log_color)s%(funcName)s - %(message)s'
+        日志全局格式 = '%(blue)s%(asctime)s %(white)s%(relativepath)s:%(lineno)d %(log_color)s%(funcName)s - %(message)s'
     for 日志格式 in logger.handlers:
         日志格式.setFormatter(colorlog.ColoredFormatter(日志全局格式, '%m-%d %H:%M:%S'))
 
@@ -768,17 +768,19 @@ class 项目经理(BaseSolver):
         self.run_order_rooms = {}
 
     def 返回基建主界面(self):
-        logger.info('返回基建主界面')
-        self.recog.update()
-        while not self.get_infra_scene() == 201:
-            if Mower0线程.stopped():  return
+        返回次数 = 0
+        while 返回次数 < 10 and not self.get_infra_scene() == 201:
             self.recog.update()
+            if Mower0线程.stopped():  return
+            logger.info('返回基建主界面')
             if self.find('nav_button') is not None: self.tap((self.recog.w // 15, self.recog.h // 20))
-            else:
-                time.sleep(3)
-                self.back_to_infrastructure()
+            elif self.get_infra_scene() == 9998:  time.sleep(3)
+            else:   self.back_to_infrastructure()
+            self.recog.update()
+            返回次数 += 1
 
     def run(self) -> None:
+        if Mower0线程.stopped():  return
         self.error = False
         if len(self.任务列表) == 0:
             self.recog.update()
@@ -795,7 +797,6 @@ class 项目经理(BaseSolver):
         return super().run()
 
     def transition(self) -> None:
-        if Mower0线程.stopped():  return
         self.recog.update()
         if self.get_infra_scene() == 1: self.tap_themed_element('index_infrastructure')
         elif self.scene() == 201:   return self.基建主程序()
@@ -1032,25 +1033,36 @@ class 项目经理(BaseSolver):
             self.todo_task = True
 
     def 进入房间(self, 门牌号: str) -> tp.Rectangle:
+        if Mower0线程.stopped():  return
         """ 获取房间的位置并进入 """
+        已进入房间 = False
+        尝试进入次数 = 0
+        while not 已进入房间:
+            try:
+                # 获取基建各个房间的位置
+                基建房间划分 = segment.base(self.recog.img, self.find('control_central', strict=True))
+                # 将画面外的部分删去
+                _房间 = 基建房间划分[门牌号]
 
-        # 获取基建各个房间的位置
-        基建房间划分 = segment.base(self.recog.img, self.find('control_central', strict=True))
-        # 将画面外的部分删去
-        _房间 = 基建房间划分[门牌号]
+                for i in range(4):
+                    _房间[i, 0] = max(_房间[i, 0], 0)
+                    _房间[i, 0] = min(_房间[i, 0], self.recog.w)
+                    _房间[i, 1] = max(_房间[i, 1], 0)
+                    _房间[i, 1] = min(_房间[i, 1], self.recog.h)
 
-        for i in range(4):
-            _房间[i, 0] = max(_房间[i, 0], 0)
-            _房间[i, 0] = min(_房间[i, 0], self.recog.w)
-            _房间[i, 1] = max(_房间[i, 1], 0)
-            _房间[i, 1] = min(_房间[i, 1], self.recog.h)
-
-        # 点击进入
-        self.tap(_房间[0], interval=1)
-        while self.find('control_central') is not None: self.tap(_房间[0], interval=1)
-        if 门牌号.startswith('room'):  logger.info(f'进入房间 B{门牌号[5]}0{门牌号[7]}')
-        elif 门牌号 == 'dormitory_4':  logger.info('进入房间 B401')
-        else:   logger.info(f'进入房间 B{门牌号[10]}04')
+                # 点击进入
+                self.tap(_房间[0], interval=3)
+                while self.find('control_central') is not None: self.tap(_房间[0], interval=1)
+                if 门牌号.startswith('room'):  logger.info(f'进入房间 B{门牌号[5]}0{门牌号[7]}')
+                elif 门牌号 == 'dormitory_4':  logger.info('进入房间 B401')
+                else:   logger.info(f'进入房间 B{门牌号[10]}04')
+                已进入房间 = True
+            except Exception as e:
+                尝试进入次数 += 1
+                self.返回基建主界面()
+                time.sleep(3)
+                if 尝试进入次数 > 5:
+                    raise e
 
     def 无人机协助跑单(self):
         logger.info('无人机协助跑单')
@@ -1406,7 +1418,6 @@ class 项目经理(BaseSolver):
                 except Exception as e:
                     logger.exception(e)
                     干员选择报错 += 1
-                    time.sleep(5)
                     self.返回基建主界面()
             # 上次跑单时间 = self.任务列表[0].time
             del 任务列表[房间]  # 如果完成则移除该任务
@@ -1794,7 +1805,6 @@ class 线程(threading.Thread):
     def Mower0(self):
         global ope_list, 当前项目, 任务提示, 下个任务开始时间, 已签到日期
         # 第一次执行任务
-        日志设置()
         任务列表 = []
         for Mower0任务 in 任务列表:  Mower0任务.time = datetime.strptime(str(Mower0任务.time), '%m-%d %H:%M:%S.%f')
         重连次数上限 = 10
@@ -1994,7 +2004,8 @@ if 悬浮字幕开关:
     悬浮字幕.bind("<MouseWheel>", 缩放字幕)
 
 if __name__ == "__main__":
-    Mower0线程= 线程()
+    日志设置()
+    Mower0线程 = 线程()
     Mower0线程.start()
     threading.Thread(target=托盘图标.run, daemon=False).start()
     if 悬浮字幕开关:
