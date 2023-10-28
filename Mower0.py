@@ -62,7 +62,7 @@ ocr = None
 已签到日期 = str()
 关卡掉落 = {}
 
-with open('Mower1用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
+with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
     用户配置 = yaml.load(用户配置文件.read(), Loader=yaml.FullLoader)
 
 服务器 = 'com.hypergryph.arknights'
