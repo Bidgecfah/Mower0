@@ -419,14 +419,24 @@ def 森空岛获取信息():
     try:
         if 用户配置['登录凭证'] == '否': 登录凭证 = login_by_password()
         else:   登录凭证 = 用户配置['登录凭证']
+        森空岛小秘书角色UID = str(用户配置.get('森空岛小秘书角色UID'))  # character['uid'] 是 str，把 森空岛小秘书账号UID 转成 str
         sign_token = get_cred_by_token(登录凭证)['token']
         header['cred'] = get_cred_by_token(登录凭证)['cred']
         characters = get_binding_list(sign_token)
-        for i in characters:
-            Host = f"https://zonai.skland.com/api/v1/game/player/info?uid={i.get('uid')}"
-            内容 = requests.get(Host, headers=get_sign_header(Host, 'get', None, header, sign_token)).json()
-            with open('森空岛数据.json', 'w') as 保存: json.dump(内容, 保存)
-    except: pass
+        if any(character.get('uid') == 森空岛小秘书角色UID for character in characters):
+            # 如果确实绑定了 用户配置['森空岛小秘书账号UID']这个角色，就使用这个账号
+            uid = 森空岛小秘书角色UID
+        elif characters:  # 否则就用第一个角色
+            uid = characters[0].get('uid')
+        else:  # 如果没有角色，就不获取信息了
+            return
+        url = f"https://zonai.skland.com/api/v1/game/player/info?uid={uid}"
+        headers = get_sign_header(url, 'get', None, header, sign_token)
+        内容 = requests.get(url, headers=headers).json()
+        with open('森空岛数据.json', 'w', encoding='utf-8') as 保存:
+            json.dump(内容, 保存)
+    except Exception as e:
+        logger.warning(f'森空岛信息获取失败，原因：{e!r}')
 
 
 _理智回满剩余时间 = 9999
