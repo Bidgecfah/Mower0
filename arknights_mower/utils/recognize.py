@@ -84,8 +84,10 @@ class Recognizer(object):
             self.scene = Scene.NAVIGATION_BAR
         elif self.find('login_new',score= 0.8) is not None:
             self.scene = Scene.LOGIN_NEW
-        elif self.find('login_bilibili_new',score= 0.8) is not None:
-            self.scene = Scene.LOGIN_NEW_B
+        elif self.find('login_bilibili_entry', score=0.8) is not None: # 会被识别成公告，优先级应当比公告高
+            self.scene = Scene.LOGIN_BILIBILI
+        elif self.find('login_bilibili_privacy_accept', score=0.8) is not None:
+            self.scene = Scene.LOGIN_BILIBILI_PRIVACY
         elif self.find('close_mine') is not None:
             self.scene = Scene.CLOSE_MINE
         elif self.find('check_in') is not None:
@@ -219,8 +221,6 @@ class Recognizer(object):
             self.scene = Scene.TERMINAL_BIOGRAPHY
         elif self.find('collection') is not None:
             self.scene = Scene.TERMINAL_COLLECTION
-        elif self.find('login_bilibili') is not None:
-            self.scene = Scene.LOGIN_BILIBILI
         elif self.find('loading6') is not None:
             self.scene = Scene.LOADING
         elif self.find('loading7') is not None:
