@@ -1,8 +1,6 @@
 from __future__ import annotations
 import copy
 import ctypes
-import multiprocessing
-
 import colorlog
 import cv2
 import hashlib
@@ -587,7 +585,7 @@ def 森空岛实时数据分析():
                     # 跳过心情意义不大的干员
                     if 数据['charInfoMap'][干员['charId']]['name'] in [
                         '纯烬艾雅法拉', '杜林', '夜莺', '凛冬', '刺玫', '流明', '波登可', '桃金娘', '爱丽丝', '四月', '闪灵',
-                        '车尔尼', '寒檀', '特米米', '黑', '初雪', '临光', '冰酿',
+                        '车尔尼', '寒檀', '特米米', '黑', '初雪', '临光', '冰酿', '塑心',
                     ]:  continue
                     if 干员['charId'] == 'char_391_rosmon':   感知信息 = True
                     if 干员['charId'] == 'char_455_nothin':   人间烟火 = True
@@ -608,7 +606,7 @@ def 森空岛实时数据分析():
                         # 菲亚梅塔
                         if 干员['charId'] == 'char_300_phenxi':
                             干员心情 = min(干员心情 + (数据['currentTs'] - 干员['lastApAddTime']) / 1800, 24)
-                        if 干员心情 > 17.8:
+                        if 干员心情 > 17:
                             刺玫 = False
                             for 同宿舍干员 in 房间['chars']:
                                 if 同宿舍干员['charId'] == 'char_494_vendla':
@@ -618,7 +616,7 @@ def 森空岛实时数据分析():
                                 干员心情提示名单 += 干员['charId']
                                 信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}在刺玫的宿舍 {门牌号[房间['slotId']]} 心情达到了 {round(干员心情, 2)}\n"
                                 提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}在刺玫的宿舍 {门牌号[房间['slotId']]} 心情达{round(干员心情, 2)}！\n"
-                            elif 干员心情 > 23.8:
+                            elif 干员心情 > 23:
                                 干员心情提示名单 += 干员['charId']
                                 信息内容 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情达到了{round(干员心情, 2)}\n"
                                 提示信息 += f"{数据['charInfoMap'][干员['charId']]['name']}的心情达{round(干员心情, 2)}！\n"
@@ -833,6 +831,7 @@ class 项目经理(BaseSolver):
                 True if task_type == '' else task_type in e.type)), None)
 
     def 处理报错(self, force=False):
+        global 循环次数
         if Mower0线程.stopped():  return
         报错计时 = datetime.now()
         循环次数 = 0
@@ -840,8 +839,8 @@ class 项目经理(BaseSolver):
             logger.error('处理报错')
             self.back_to_index()
             循环次数 += 1
-            if (datetime.now() - 报错计时).total_seconds() > self.跑单提前运行时间 // 2:
-                logger.info(f'报错次数达{循环次数}次，时间长达{round((datetime.now() - 报错计时).total_seconds())}秒')
+            if (datetime.now() - 报错计时).total_seconds() > self.跑单提前运行时间 // 4:
+                logger.error(f'报错次数达{循环次数}次，时间长达{round((datetime.now() - 报错计时).total_seconds())}秒')
                 重新运行Mower0()
                 return
             self.recog.update()
@@ -1061,8 +1060,7 @@ class 项目经理(BaseSolver):
                     _房间[i, 1] = min(_房间[i, 1], self.recog.h)
 
                 # 点击进入
-                self.tap(_房间[0], interval=3)
-                while self.find('control_central') is not None: self.tap(_房间[0], interval=1)
+                while self.find('control_central') is not None: self.tap(_房间[0], interval=3)
                 if 门牌号.startswith('room'):  logger.info(f'进入房间 B{门牌号[5]}0{门牌号[7]}')
                 elif 门牌号 == 'dormitory_4':  logger.info('进入房间 B401')
                 else:   logger.info(f'进入房间 B{门牌号[10]}04')
@@ -1083,14 +1081,13 @@ class 项目经理(BaseSolver):
             点击计数 += 1
         while self.find('bill_accelerate') is None: self.tap((self.recog.w * 3 // 4, self.recog.h * 4 // 5))
 
-    def 无人机加速拉开订单间时间差距(self, 门牌号: str, not_customize=False, not_return=False):
+    def 无人机加速调整订单时间(self, 门牌号: str, not_customize=False, not_return=False):
         # 点击进入该房间
         self.进入房间(门牌号)
         if self.get_infra_scene() == 9:
             if not self.waiting_solver(9, sleep_time=2):    return
         # 进入房间详情
         self.tap((self.recog.w // 20, self.recog.h * 19 // 20), interval=3)
-        # 关闭掉房间总览
         报错计数 = 0
         while self.find('factory_accelerate') is None and self.find('bill_accelerate') is None:
             if 报错计数 > 5:    raise Exception('未成功进入无人机界面')
@@ -1098,7 +1095,9 @@ class 项目经理(BaseSolver):
             报错计数 += 1
         无人机协助 = self.find('bill_accelerate')
         if 无人机协助:
-            while (self.任务列表[1].time - self.任务列表[0].time).total_seconds() < self.跑单提前运行时间:
+            while ((self.任务列表[1].time - self.任务列表[0].time).total_seconds() < self.跑单提前运行时间
+                   and (datetime.now().replace(hour=4, minute=0, second=0, microsecond=0) - 当前项目.任务列表[0].time)
+                           .total_seconds() < 2 * 当前项目.跑单提前运行时间):
                 logger.info(f'房间 B{门牌号[5]}0{门牌号[7]}')
                 self.tap(无人机协助)
                 if self.get_infra_scene() == 9:
@@ -1487,7 +1486,14 @@ class 项目经理(BaseSolver):
                 self.recog.update()
                 if self.get_infra_scene() == 206:   self.tap((self.recog.w * 2 // 3, self.recog.h - 10), rebuild=True)
                 logger.info("订单交付")
-                self.tap((self.recog.w // 4, self.recog.h // 4), interval=1)
+                场合报错 = 0
+                while (self.find(
+                        "order_ready", scope=((self.recog.w * 450 // 1920, self.recog.h * 675 // 1080),
+                                              (self.recog.w * 600 // 1920, self.recog.h * 750 // 1080)))
+                       is not None):
+                    if 场合报错 > 5:    raise Exception('未成功交付订单')
+                    self.tap((self.recog.w // 4, self.recog.h // 4), interval=1)
+                    场合报错 += 1
                 self.back(interval=2)
                 场合报错 = 0
                 while self.find('room_detail') is None:
@@ -1752,11 +1758,6 @@ class 项目经理(BaseSolver):
 
 
 def 初始化(任务列表, scheduler=None):
-    config.ADB_DEVICE = [用户配置['adb地址']]
-    config.ADB_CONNECT = [用户配置['adb地址']]
-    config.APPNAME = 服务器
-    config.TAP_TO_LAUNCH = [{"enable": "false", "x": "0", "y": "0"}]
-    init_fhlr()
     device = 设备控制()
     cli = Solver(device)
     if scheduler is None:
@@ -1830,11 +1831,18 @@ class 线程(threading.Thread):
             try:
                 if len(当前项目.任务列表) > 0:
                     当前项目.任务列表.sort(key=lambda x: x.time, reverse=False)  # 任务按时间排序
-                    # 如果订单间的时间差距小，无人机加速拉开订单间的时间差距
+                    # 如果订单间的时间差距小，无人机协助拉开订单间的时间差距
                     if (len(任务列表) > 1 and (任务列表[0].time - datetime.now()).total_seconds()
                             > 当前项目.跑单提前运行时间 > (任务列表[1].time - 任务列表[0].time).total_seconds()):
-                        logger.warning("两个订单时间太接近了，准备用无人机加速拉开订单间时间差距")
-                        当前项目.无人机加速拉开订单间时间差距(任务列表[0].type, True, True)
+                        logger.warning("两个订单时间太接近了，准备用无人机协助拉开订单间时间差距")
+                        当前项目.无人机加速调整订单时间(任务列表[0].type, True, True)
+                    # 如果开始跑单时间到4:00的差距过小，无人机协助提前订单时间
+                    if (len(任务列表) > 1 and 2 * 当前项目.跑单提前运行时间 >
+                            (datetime.now().replace(hour=4, minute=0, second=0, microsecond=0)
+                             - 当前项目.任务列表[0].time).total_seconds() > 0):
+                        logger.warning("跑单时间与4:00太接近了，准备用无人机协助提前订单时间")
+                        当前项目.无人机加速调整订单时间(任务列表[0].type, True, True)
+
                     下个任务开始时间 = 任务列表[0].time
                     当前项目.返回基建主界面()
                     任务间隔 = (当前项目.任务列表[0].time - datetime.now()).total_seconds()
@@ -1914,8 +1922,7 @@ def 终止线程报错(tid, exctype):
         raise SystemError("PyThreadState_SetAsyncExc failed")
 
 
-def 显示字幕():
-    窗口.deiconify()
+def 显示字幕(): 窗口.deiconify()
 
 
 def 选中窗口(event):
@@ -1925,12 +1932,10 @@ def 选中窗口(event):
     鼠标竖直初始位置 = event.y  # 获取鼠标相对于窗左上角体的Y坐标
 
 
-def 拖动窗口(event):
-    窗口.geometry(f'+{event.x_root - 鼠标水平初始位置}+{event.y_root - 鼠标竖直初始位置}')
+def 拖动窗口(event):    窗口.geometry(f'+{event.x_root - 鼠标水平初始位置}+{event.y_root - 鼠标竖直初始位置}')
 
 
-def 关闭窗口(icon: pystray.Icon):
-    窗口.withdraw()
+def 关闭窗口(icon: pystray.Icon):   窗口.withdraw()
 
 
 def 缩放字幕(event):
@@ -2014,7 +2019,12 @@ if 悬浮字幕开关:
     悬浮字幕.bind("<MouseWheel>", 缩放字幕)
 
 if __name__ == "__main__":
+    config.ADB_DEVICE = [用户配置['adb地址']]
+    config.ADB_CONNECT = [用户配置['adb地址']]
+    config.APPNAME = 服务器
+    config.TAP_TO_LAUNCH = [{"enable": "false", "x": "0", "y": "0"}]
     日志设置()
+    init_fhlr()
     Mower0线程 = 线程()
     Mower0线程.start()
     threading.Thread(target=托盘图标.run, daemon=False).start()
