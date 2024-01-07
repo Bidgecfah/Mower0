@@ -2152,7 +2152,7 @@ def 增加贸易站():
     界面.Radiobutton(跑单位置表[-1]["房间"], text='但书', variable=跑单位置表[-1][0][0], value='但书').grid(row=3, column=0, padx=10, pady=5, sticky=界面.W)
     界面.Radiobutton(跑单位置表[-1]["房间"], text='龙舌兰', variable=跑单位置表[-1][0][0], value='龙舌兰').grid(row=4, column=0, padx=10, pady=5, sticky=界面.W)
     跑单位置表[-1][0][1].grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
-    跑单位置表[-1]["+"] = 界面.Button(跑单位置表[-1]["房间"], text="+", bootstyle=(PRIMARY, "outline-toolbutton"), command=lambda 贸易站序号=-1: 增加干员(贸易站序号), width=5)
+    跑单位置表[-1]["+"] = 界面.Button(跑单位置表[-1]["房间"], text="+", bootstyle=(PRIMARY, "outline-toolbutton"), command=lambda 贸易站序号=len(跑单位置表)-1: 增加干员(贸易站序号), width=5)
     跑单位置表[-1]["+"].grid(row=1, column=3, padx=10, pady=5, sticky=界面.N+S)
 
 
