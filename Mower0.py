@@ -559,12 +559,15 @@ class 项目经理(BaseSolver):
         return 行动时间
 
     def 飞桨初始化(self):
+        det_model_dir = os.path.join(os.getcwd(), "paddleocr_models", "det")
+        rec_model_dir = os.path.join(os.getcwd(), "paddleocr_models", "rec")
+        cls_model_dir = os.path.join(os.getcwd(), "paddleocr_models", "cls")
         global ocr
         if ocr is None:
             # mac 平台不支持 mkldnn 加速，关闭以修复 mac 运行时错误
             if sys.platform == 'darwin':
-                ocr = PaddleOCR(enable_mkldnn=False, use_angle_cls=False, cls=False, show_log=False)
-            else: ocr = PaddleOCR(enable_mkldnn=True, use_angle_cls=False, cls=False, show_log=False)
+                ocr = PaddleOCR(enable_mkldnn=False, use_angle_cls=False, cls=False, show_log=False, det_model_dir=det_model_dir, rec_model_dir=rec_model_dir, cls_model_dir=cls_model_dir)
+            else: ocr = PaddleOCR(enable_mkldnn=True, use_angle_cls=False, cls=False, show_log=False, det_model_dir=det_model_dir, rec_model_dir=rec_model_dir, cls_model_dir=cls_model_dir)
             # ocr = PaddleOCR(enable_mkldnn=False, use_angle_cls=False, cls=False, show_log=False)
 
     def 读取屏幕(self, 图像, 模式="心情", 上限=24, 位置范围=None):
