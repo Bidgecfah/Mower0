@@ -213,9 +213,9 @@ class BaseSolver:
                 elif self.scene() == Scene.LOGIN_NEW:
                     self.tap(self.find('login_new', score=0.8))
                 elif self.scene() == Scene.LOGIN_BILIBILI:
-                    self.tap(self.find('login_bilibili_entry', score=0.8))
+                    self.tap(self.find('login_bilibili_entry', score=0.6))
                 elif self.scene() == Scene.LOGIN_BILIBILI_PRIVACY:
-                    self.tap(self.find('login_bilibili_privacy_accept', score=0.8))
+                    self.tap(self.find('login_bilibili_privacy_accept', score=0.6))
                 elif self.scene() == Scene.LOGIN_QUICKLY:
                     self.tap_element('login_awake')
                 elif self.scene() == Scene.LOGIN_MAIN:
