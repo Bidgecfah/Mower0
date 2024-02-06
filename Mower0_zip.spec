@@ -56,6 +56,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='元素/图标.png',
+    contents_directory='.',
 )
 coll = COLLECT(
     exe,
