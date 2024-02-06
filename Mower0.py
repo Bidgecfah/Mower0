@@ -1165,7 +1165,7 @@ class 项目经理(BaseSolver):
                 'times': 999,
                 'report_to_penguin': True,
                 'client_type': '',
-                'penguin_id': '',
+                'penguin_id': str(用户配置.get('企鹅物流汇报ID', '')),
                 'DrGrandet': False,
                 'server': 'CN',
                 'expiring_medicine': 9999
@@ -1545,11 +1545,13 @@ def 停止运行Mower0():
     while not Mower0线程.stopped():
         try:
             字幕窗口.withdraw()
-            # while 当前项目.MAA.running():
-            #     当前项目.MAA.stop
             Mower0线程._stop_event.set()
             终止线程报错(Mower0线程.ident, SystemExit)
         except: pass
+    try:
+        当前项目.MAA.stop()
+    except Exception:
+        pass
     logger.warning('Mower0已停止')
 
 
@@ -1751,12 +1753,12 @@ def 森空岛获取信息():
             登录凭证 = login_by_password()
         else:
             登录凭证 = 用户配置['登录凭证']
-        森空岛小秘书角色UID = str(用户配置.get('森空岛小秘书角色UID'))  # character['uid'] 是 str，把 森空岛小秘书账号UID 转成 str
+        森空岛小秘书角色UID = str(用户配置.get('森空岛小秘书角色UID'))  # character['uid'] 是 str，把 森空岛小秘书角色UID 转成 str
         sign_token = get_cred_by_token(登录凭证)['token']
         header['cred'] = get_cred_by_token(登录凭证)['cred']
         characters = get_binding_list(sign_token)
         if any(character.get('uid') == 森空岛小秘书角色UID for character in characters):
-            # 如果确实绑定了 用户配置['森空岛小秘书账号UID']这个角色，就使用这个账号
+            # 如果确实绑定了 用户配置['森空岛小秘书角色UID']这个角色，就使用这个账号
             uid = 森空岛小秘书角色UID
         elif characters:
             uid = characters[0].get('uid')  # 否则就用第一个角色
@@ -1863,8 +1865,8 @@ def 森空岛实时数据分析():
         if _可赠线索 < 可赠线索: 提示 = True
     if 线索交流剩余时间 < 60:
         信息内容 += f"距线索交流结束还有 {线索交流剩余时间 // 3600}小时{线索交流剩余时间 % 3600 // 60}分钟\n"
-        提示信息 += f"距线索交流结束 {线索交流剩余时间 // 60}分钟！\n"
-        if _线索交流剩余时间 >= 60: 提示 = True
+        提示信息 += f"距线索交流结束还有 {线索交流剩余时间 // 3600}小时{线索交流剩余时间 % 3600 // 60}分钟！\n"
+        if _线索交流剩余时间 >= 60:   提示 = True
     _可赠线索 = 可赠线索
     _线索交流剩余时间 = 线索交流剩余时间
 
@@ -2293,7 +2295,7 @@ def 更新字幕():
         字幕 = f'Mower0将在{int(任务倒计时 / 60)}分钟后开始跑单'
         if 任务倒计时 <= 跑单提前运行时间: 字幕 += '\n跑单即将开始！'
     悬浮字幕.config(text=字幕, font=(用户配置['字幕字体'], 字幕字号, 'bold'), bg=字幕颜色, fg=字幕颜色[:6] + str(int(字幕颜色[5] == '0')))
-    字幕窗口.after(100, 更新字幕)
+    字幕窗口.after(1000, 更新字幕)
 
 
 初启动 = True
@@ -2308,7 +2310,7 @@ ocr = None
 if os.path.exists('Mower0用户配置文件.yaml'): 读取文件 = 'Mower0用户配置文件.yaml'
 else: 读取文件 = '元素/Mower0用户配置文件 - 备份.yaml'
 with open(读取文件, 'r', encoding='utf-8') as 用户配置文件:
-    用户配置 = yaml.load(用户配置文件.read(), Loader=yaml.FullLoader)
+    用户配置 = yaml.load(用户配置文件.read(), Loader=yaml.SafeLoader)
 服务器 = 'com.hypergryph.arknights.bilibili' if 用户配置['服务器'] == 'Bilibili服务器' else 'com.hypergryph.arknights'
 弹窗提醒 = True if 用户配置['弹窗提醒开关'] == '开' else False
 跑单提前运行时间 = 用户配置['跑单提前运行时间']
