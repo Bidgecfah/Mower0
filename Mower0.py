@@ -430,8 +430,14 @@ def 森空岛获取信息():
         url = f"https://zonai.skland.com/api/v1/game/player/info?uid={uid}"
         headers = get_sign_header(url, 'get', None, header, sign_token)
         内容 = requests.get(url, headers=headers).json()
-        with open('森空岛数据.json', 'w', encoding='utf-8') as 保存:   json.dump(内容, 保存)
-    except Exception as e:  logger.warning(f'森空岛信息获取失败，原因：{e!r}')
+        with open('森空岛数据.json', 'w', encoding='utf-8') as 保存:
+            json.dump(内容, 保存, ensure_ascii=False, indent=4)
+    except Exception as e:
+        logger.warning(f'森空岛信息获取失败，原因：{e!r}')
+
+#         with open('森空岛数据.json', 'w', encoding='utf-8') as 保存:   json.dump(内容, 保存)
+#     except Exception as e:  logger.warning(f'森空岛信息获取失败，原因：{e!r}')
+
 
 
 _理智回满剩余时间 = 9999
@@ -467,7 +473,8 @@ def 森空岛实时数据分析():
     }
 
     global _理智回满剩余时间, _公开招募刷新次数, _无人机充满剩余时间, _可赠线索, _线索交流剩余时间, _干员心情提示名单, _信息内容
-    数据 = json.load(open('森空岛数据.json'))['data']
+    with open('森空岛数据.json', mode='r', encoding='utf-8') as fp:
+        数据 = json.load(fp)['data']
     提示 = False
     提示信息 = str()
     信息内容 = str()
@@ -674,9 +681,13 @@ def 森空岛实时数据分析():
 
 
 def 森空岛干员阵容查询():
-    try: 森空岛获取信息()
-    except Exception as ex: logger.warning(f'森空岛信息获取失败，原因：{str(ex)}')
-    数据 = json.load(open('森空岛数据.json'))['data']
+
+    try:
+        森空岛获取信息()
+    except Exception as ex:
+        logger.warning(f'森空岛信息获取失败，原因：{str(ex)}')
+    with open('森空岛数据.json', mode='r', encoding='utf-8') as fp:
+        数据 = json.load(fp)['data']
     阵容内容 = f"\n{数据['status']['name'].split('#')[0]} 博士，根据从森空岛采集到的信息，罗德岛目前的阵容概况如下：\n"
     总计消耗经验 = 0
     总计消耗龙门币 = 0
