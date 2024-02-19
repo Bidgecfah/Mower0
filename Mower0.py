@@ -1138,7 +1138,10 @@ class 项目经理(BaseSolver):
                 logger.info(f"关卡掉落: {物品名称} × {物品数量}")
 
     def MAA初始化(self):
-        asst_path = os.path.dirname(pathlib.Path(self.MAA设置['MAA路径']) / "Python" / "asst")
+        MAA路径 = pathlib.Path(self.MAA设置['MAA路径'])
+        if MAA路径.suffix == '.exe':
+            MAA路径 = MAA路径.parent
+        asst_path = os.path.dirname(MAA路径 / "Python" / "asst")
         if asst_path not in sys.path: sys.path.append(asst_path)
 
         from asst.asst import Asst
