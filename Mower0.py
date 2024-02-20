@@ -1528,36 +1528,25 @@ def 终止线程报错(tid, exctype):
         raise SystemError("PyThreadState_SetAsyncExc failed")
 
 
-class 延迟运行Mower0(threading.Thread):
-    def __init__(self, delay_seconds: float = 0, *args, **kwargs):
-        super(延迟运行Mower0, self).__init__(*args, **kwargs)
-        self.delay_seconds: float = delay_seconds
-        self._stop_event = threading.Event()
+def 重新运行Mower0():
+    global Mower0线程, 工位表
+    停止运行Mower0()
+    logger.warning('重新运行Mower0')
+    工位表 = {}
+    Mower0线程 = 线程()
+    Mower0线程.start()
+    显示字幕()
 
-    def stop(self):
-        self._stop_event.set()
-
-    def run(self):
-        global Mower0线程, 工位表
-        time.sleep(self.delay_seconds)
-        if self._stop_event.is_set():
-            return
-        停止运行Mower0()
-        logger.warning('Mower0已停止，准备重新启动Mower0')
-        工位表 = {}
-        Mower0线程 = 线程()
-        Mower0线程.start()
-        显示字幕()
-
-def 重新运行Mower0(delay_seconds: float = 0, *args, **kwargs):
+def 延迟运行Mower0(delay_seconds: float = 0, *args, **kwargs):
     global 延迟运行Mower0线程
     停止运行Mower0()
-    延迟运行Mower0线程 = 延迟运行Mower0(delay_seconds)
+    logger.warning(f'{delay_seconds // 60} 分钟后重新运行Mower0')
+    延迟运行Mower0线程 = threading.Timer(delay_seconds, 重新运行Mower0)
     延迟运行Mower0线程.start()
 
 def 停止运行Mower0():
     try:
-        延迟运行Mower0线程.stop()
+        延迟运行Mower0线程.cancel()
     except NameError:
         pass
     while not Mower0线程.stopped():
@@ -2627,10 +2616,10 @@ for 行号, 行 in enumerate(使用流程行列表): 界面.Label(使用流程�
     MenuItem('森空岛查看游戏内信息', 森空岛查看游戏内信息, visible=森空岛小秘书),
     MenuItem('森空岛干员阵容查询', 森空岛干员阵容查询, visible=森空岛小秘书),
     Menu.SEPARATOR,
-    MenuItem('重新运行Mower0', functools.partial(重新运行Mower0, 0), visible=True),
+    MenuItem('重新运行Mower0', 重新运行Mower0, visible=True),
     MenuItem('停止运行Mower0', 停止运行Mower0, visible=True),
-    MenuItem('10分钟后重新运行Mower0', functools.partial(重新运行Mower0, 10*60), visible=True),
-    MenuItem('20分钟后重新运行Mower0', functools.partial(重新运行Mower0, 20*60), visible=True),
+    MenuItem('10分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 10*60), visible=True),
+    MenuItem('20分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 20*60), visible=True),
     Menu.SEPARATOR,
     MenuItem('退出Mower0', 退出Mower0)
 )
