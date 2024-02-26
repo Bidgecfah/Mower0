@@ -2335,6 +2335,7 @@ if not 用户配置['字幕字号'] == '默认': 字幕字号 = int(用户配置
 MAA设置 = 用户配置['MAA设置']
 
 窗口 = 界面.Window(title="Mower0", themename="minty", iconphoto="元素/图标.png", size=(1550, 1000), minsize=(0, 0))
+窗口.protocol("WM_DELETE_WINDOW", 窗口.withdraw)
 标签页集 = 界面.Notebook(窗口)
 标签页集.pack(fill=BOTH, expand=YES)
 标签页 = []
@@ -2610,6 +2611,7 @@ for 行号, 行 in enumerate(使用流程行列表): 界面.Label(使用流程�
 
 托盘菜单 = (
     MenuItem(任务提示, 跑单任务查询, default=True, visible=False),
+    MenuItem('显示主界面', 窗口.deiconify),
     MenuItem('显示字幕', 显示字幕, visible=悬浮字幕开关),
     Menu.SEPARATOR,
     MenuItem('森空岛签到', 森空岛签到, visible=签到),
@@ -2650,7 +2652,7 @@ if 悬浮字幕开关:
 if __name__ == "__main__":
     日志设置()
     init_fhlr(运行信息滚动窗)
-    threading.Thread(target=托盘图标.run, daemon=False).start()
+    threading.Thread(target=托盘图标.run, daemon=True).start()
     刷新跑单位置设置()
     if 悬浮字幕开关: 更新字幕()
     mainloop()
