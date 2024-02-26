@@ -4,6 +4,7 @@ import csv
 import ctypes
 import colorlog
 import cv2
+import functools
 import hashlib
 import hmac
 import inspect
@@ -1138,7 +1139,10 @@ class 项目经理(BaseSolver):
                 logger.info(f"关卡掉落: {物品名称} × {物品数量}")
 
     def MAA初始化(self):
-        asst_path = os.path.dirname(pathlib.Path(self.MAA设置['MAA路径']) / "Python" / "asst")
+        MAA路径 = pathlib.Path(self.MAA设置['MAA路径'])
+        if MAA路径.suffix == '.exe':
+            MAA路径 = MAA路径.parent
+        asst_path = os.path.dirname(MAA路径 / "Python" / "asst")
         if asst_path not in sys.path: sys.path.append(asst_path)
 
         from asst.asst import Asst
@@ -1525,23 +1529,26 @@ def 终止线程报错(tid, exctype):
 
 
 def 重新运行Mower0():
-    global Mower0线程, 工位表, 当前项目
-    while not Mower0线程.stopped():
-        try:
-            # while 当前项目.MAA.running():
-            #     当前项目.MAA.stop
-            Mower0线程._stop_event.set()
-            终止线程报错(Mower0线程.ident, SystemExit)
-        except: pass
-    logger.warning('Mower0已停止，准备重新启动Mower0')
+    global Mower0线程, 工位表
+    停止运行Mower0()
+    logger.warning('重新运行Mower0')
     工位表 = {}
     Mower0线程 = 线程()
     Mower0线程.start()
     显示字幕()
 
+def 延迟运行Mower0(delay_seconds: float = 0, *args, **kwargs):
+    global 延迟运行Mower0线程
+    停止运行Mower0()
+    logger.warning(f'{delay_seconds // 60} 分钟后重新运行Mower0')
+    延迟运行Mower0线程 = threading.Timer(delay_seconds, 重新运行Mower0)
+    延迟运行Mower0线程.start()
 
 def 停止运行Mower0():
-    global Mower0线程, 当前项目
+    try:
+        延迟运行Mower0线程.cancel()
+    except NameError:
+        pass
     while not Mower0线程.stopped():
         try:
             字幕窗口.withdraw()
@@ -2264,7 +2271,10 @@ def 运行信息滚轮(event):
     运行信息滚动窗.yview_scroll(int(-1*(event.delta/120)), "units")
 
 
-def 显示字幕(): 字幕窗口.deiconify()
+def 显示字幕():
+    if not 悬浮字幕开关:
+        return
+    字幕窗口.deiconify()
 
 
 def 选中窗口(event):
@@ -2325,6 +2335,7 @@ if not 用户配置['字幕字号'] == '默认': 字幕字号 = int(用户配置
 MAA设置 = 用户配置['MAA设置']
 
 窗口 = 界面.Window(title="Mower0", themename="minty", iconphoto="元素/图标.png", size=(1550, 1000), minsize=(0, 0))
+窗口.protocol("WM_DELETE_WINDOW", 窗口.withdraw)
 标签页集 = 界面.Notebook(窗口)
 标签页集.pack(fill=BOTH, expand=YES)
 标签页 = []
@@ -2598,17 +2609,22 @@ for 行号, 行 in enumerate(程序特点行列表):
 for 行号, 行 in enumerate(使用流程行列表): 界面.Label(使用流程域, text=行, font="微软雅黑 9 bold", foreground="indigo").grid(row=行号, column=0, padx=10, pady=5, sticky=界面.W)
 
 
-托盘菜单 = (MenuItem(任务提示, 跑单任务查询, default=True, visible=False),
-            MenuItem('显示字幕', 显示字幕, visible=悬浮字幕开关),
-            Menu.SEPARATOR,
-            MenuItem('森空岛签到', 森空岛签到, visible=签到),
-            MenuItem('森空岛查看游戏内信息', 森空岛查看游戏内信息, visible=森空岛小秘书),
-            MenuItem('森空岛干员阵容查询', 森空岛干员阵容查询, visible=森空岛小秘书),
-            Menu.SEPARATOR,
-            MenuItem('重新运行Mower0', 重新运行Mower0, visible=True),
-            MenuItem('停止运行Mower0', 停止运行Mower0, visible=True),
-            Menu.SEPARATOR,
-            MenuItem('退出Mower0', 退出Mower0))
+托盘菜单 = (
+    MenuItem(任务提示, 跑单任务查询, default=True, visible=False),
+    MenuItem('显示主界面', 窗口.deiconify),
+    MenuItem('显示字幕', 显示字幕, visible=悬浮字幕开关),
+    Menu.SEPARATOR,
+    MenuItem('森空岛签到', 森空岛签到, visible=签到),
+    MenuItem('森空岛查看游戏内信息', 森空岛查看游戏内信息, visible=森空岛小秘书),
+    MenuItem('森空岛干员阵容查询', 森空岛干员阵容查询, visible=森空岛小秘书),
+    Menu.SEPARATOR,
+    MenuItem('重新运行Mower0', 重新运行Mower0, visible=True),
+    MenuItem('停止运行Mower0', 停止运行Mower0, visible=True),
+    MenuItem('10分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 10*60), visible=True),
+    MenuItem('20分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 20*60), visible=True),
+    Menu.SEPARATOR,
+    MenuItem('退出Mower0', 退出Mower0)
+)
 托盘图标 = pystray.Icon("Mower0", Image.open("元素/图标.png"), "Mower0", 托盘菜单)
 
 
@@ -2636,7 +2652,7 @@ if 悬浮字幕开关:
 if __name__ == "__main__":
     日志设置()
     init_fhlr(运行信息滚动窗)
-    threading.Thread(target=托盘图标.run, daemon=False).start()
+    threading.Thread(target=托盘图标.run, daemon=True).start()
     刷新跑单位置设置()
     if 悬浮字幕开关: 更新字幕()
     mainloop()

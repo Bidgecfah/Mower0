@@ -174,7 +174,8 @@ dmypy.json
 ###JetBrains Product###
 .idea/*
 
-### 命令行运行产生的/tmp/data.db
+### 命令行运行产生的/tmp/data.db 和 paddleocr_models
 /tmp/
+/paddleocr_models/
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
