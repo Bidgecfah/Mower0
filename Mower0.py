@@ -321,7 +321,7 @@ class log_sync(threading.Thread):
 def 日志设置():
     config.LOGFILE_PATH = 用户配置['日志存储目录']
     config.SCREENSHOT_PATH = 用户配置['截图存储目录']
-    config.SCREENSHOT_MAXNUM = int(用户配置['每种截图的最大保存数量']) - 1
+    config.SCREENSHOT_MAXNUM = int(用户配置['每种截图的最大存储数量']) - 1
     config.MAX_RETRYTIME = 10
     日志全局格式 = '%(blue)s%(asctime)s %(white)s%(relativepath)s:%(lineno)d %(log_color)s%(funcName)s - %(message)s'
     for 日志格式 in logger.handlers:
@@ -1110,9 +1110,9 @@ class 项目经理(BaseSolver):
                         logger.exception(e)
                         self.返回基建主界面()
 
-                if 龙舌兰和但书休息 and 房间.startswith('room'):
+                if 自动休息 and 房间.startswith('room'):
                     宿舍 = {}
-                    宿舍[龙舌兰和但书休息宿舍] = [data["agent"] for data in self.plan[龙舌兰和但书休息宿舍]]
+                    宿舍[自动休息宿舍] = [data["agent"] for data in self.plan[自动休息宿舍]]
                     self.任务列表.append(SchedulerTask(time=self.任务列表[0].time, task_plan=宿舍))
 
 
@@ -1335,18 +1335,22 @@ class 项目经理(BaseSolver):
                 else: 邮件.attach(MIMEText(str(内容), 'plain', 'utf-8'))
                 邮件['Subject'] = (f"将在{self.任务列表[0].time.strftime('%H:%M')}于房间 "
                                    f"B{self.任务列表[0].type[5]}0{self.任务列表[0].type[7]} 进行跑单")
-                邮件['From'] = self.邮件设置['发信邮箱']
+                邮件['From'] = self.邮件设置['发件邮箱']
                 邮箱 = smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10.0)
+                邮箱.ehlo()
+                # 邮箱.starttls()
                 # 登录邮箱
-                邮箱.login(self.邮件设置['发信邮箱'], self.邮件设置['授权码'])
+                邮箱.login(self.邮件设置['发件邮箱'], self.邮件设置['授权码'])
                 # 开始发送
-                邮箱.sendmail(self.邮件设置['发信邮箱'], self.邮件设置['收件人邮箱'], 邮件.as_string())
+                邮箱.sendmail(self.邮件设置['发件邮箱'], self.邮件设置['收件邮箱'], 邮件.as_string())
+                邮箱.quit()
                 break
             except Exception as e:
-                logger.error("邮件发送失败")
-                logger.exception(e)
-                重试次数 -= 1
+                # logger.error("邮件发送失败")
+                # logger.exception(e)
+                # 重试次数 -= 1
                 time.sleep(1)
+                pass
 
 
 def 初始化(任务列表, scheduler=None):
@@ -1371,16 +1375,16 @@ def 初始化(任务列表, scheduler=None):
                 当前项目.plan[f'room_{房间[1]}_{房间[3]}'].append({'agent': '', 'group': '', 'replacement': [干员]})
                 if len(工位表[f'room_{房间[1]}_{房间[3]}']) == 0 or 工位表[f'room_{房间[1]}_{房间[3]}'][0] == '':
                     工位表[f'room_{房间[1]}_{房间[3]}'].append('')
-        if 龙舌兰和但书休息:
-            global 龙舌兰和但书休息宿舍
+        if 自动休息:
+            global 自动休息宿舍
             for 宿舍 in 用户配置['宿舍设置']:
-                if 宿舍 == 'B401': 龙舌兰和但书休息宿舍 = 'dormitory_4'
-                else: 龙舌兰和但书休息宿舍 = 'dormitory_' + 宿舍[1]
-                当前项目.plan[龙舌兰和但书休息宿舍] = []
+                if 宿舍 == 'B401': 自动休息宿舍 = 'dormitory_4'
+                else: 自动休息宿舍 = 'dormitory_' + 宿舍[1]
+                当前项目.plan[自动休息宿舍] = []
                 for 干员 in 用户配置['宿舍设置'][宿舍]:
                     if 干员 == '当前休息干员': 干员 = 'Current'
                     if 干员 == '自动填充干员': 干员 = 'Free'
-                    当前项目.plan[龙舌兰和但书休息宿舍].append({'agent': 干员, 'group': '', 'replacement': ''})
+                    当前项目.plan[自动休息宿舍].append({'agent': 干员, 'group': '', 'replacement': ''})
         当前项目.任务列表 = 任务列表
         当前项目.上个房间 = ''
         当前项目.MAA = None
@@ -1468,7 +1472,9 @@ class 线程(threading.Thread):
                         if MAA设置['作战开关'] == '开' and (任务间隔 > 600): 当前项目.MAA任务调度器()
                         else:
                             if 用户配置['任务结束后退出游戏'] == '是' and 任务间隔 > 跑单提前运行时间:
-                                当前项目.device.exit(当前项目.服务器)
+                                try:
+                                    当前项目.device.exit(当前项目.服务器)
+                                except: pass
                             else: 当前项目.back_to_index()
                             if 森空岛小秘书:
                                 while (当前项目.任务列表[0].time - datetime.now()).total_seconds() > 2 * 跑单提前运行时间 + 360:
@@ -1537,12 +1543,14 @@ def 重新运行Mower0():
     Mower0线程.start()
     显示字幕()
 
+
 def 延迟运行Mower0(delay_seconds: float = 0, *args, **kwargs):
     global 延迟运行Mower0线程
     停止运行Mower0()
     logger.warning(f'{delay_seconds // 60} 分钟后重新运行Mower0')
     延迟运行Mower0线程 = threading.Timer(delay_seconds, 重新运行Mower0)
     延迟运行Mower0线程.start()
+
 
 def 停止运行Mower0():
     try:
@@ -2196,16 +2204,16 @@ def 保存配置():
                 if 项目 in [0, 1, 2]: 用户配置['跑单位置设置'][贸易站].append(跑单位置表[序号][项目][0].get())
         用户配置['日志存储目录'] = 日志存储目录输入.get()
         用户配置['截图存储目录'] = 截图存储目录输入.get()
-        用户配置['每种截图的最大保存数量'] = 每种截图的最大保存数量输入.get()
+        用户配置['每种截图的最大存储数量'] = 每种截图的最大存储数量输入.get()
         用户配置['弹窗提醒开关'] = '开' if 弹窗提醒开关输入.get() else '关'
         用户配置['悬浮字幕开关'] = '开' if 悬浮字幕开关输入.get() else '关'
         用户配置['字幕字号'] = 悬浮字幕字号输入.get()
         用户配置['字幕字体'] = 悬浮字幕字体输入.get()
         用户配置['字幕颜色'] = 悬浮字幕颜色输入.get()
         用户配置['邮件设置']['邮件提醒开关'] = '开' if 邮件提醒开关输入.get() else '关'
-        用户配置['邮件设置']['发信邮箱'] = 发信邮箱输入.get()
+        用户配置['邮件设置']['发件邮箱'] = 发件邮箱输入.get()
         用户配置['邮件设置']['授权码'] = 授权码输入.get()
-        用户配置['邮件设置']['收件人邮箱'] = [收件人邮箱输入.get()]
+        用户配置['邮件设置']['收件邮箱'] = [收件邮箱输入.get()]
         用户配置['森空岛签到开关'] = '开' if 森空岛签到开关输入.get() else '关'
         用户配置['森空岛小秘书开关'] = '开' if 森空岛小秘书开关输入.get() else '关'
         用户配置['登录凭证'] = 登录凭证输入.get()
@@ -2215,7 +2223,7 @@ def 保存配置():
         用户配置['更换干员前缓冲时间'] = int(更换干员前缓冲时间输入.get())
         用户配置['跑单消耗无人机开关'] = '开' if 跑单消耗无人机开关输入.get() else '关'
         用户配置['任务结束后退出游戏'] = '是' if 任务结束后退出游戏开关输入.get() else '否'
-        用户配置['龙舌兰和但书休息'] = '开' if 龙舌兰和但书自动休息开关输入.get() else '关'
+        用户配置['自动休息'] = '开' if 自动休息开关输入.get() else '关'
         用户配置['宿舍设置'][宿舍门牌号输入.get()] = []
         for 序号 in range(5):
             用户配置['宿舍设置'][宿舍门牌号输入.get()].append(宿舍干员安排[序号].get())
@@ -2238,7 +2246,7 @@ def 保存配置():
 
 
 def 开始运行():
-    global 初启动, Mower0线程, 服务器, 弹窗提醒, 跑单提前运行时间, 更换干员前缓冲时间, 龙舌兰和但书休息, 悬浮字幕开关, 签到, 森空岛小秘书, 字幕字号, 字幕颜色, 邮件设置, MAA设置
+    global 初启动, Mower0线程, 服务器, 弹窗提醒, 跑单提前运行时间, 更换干员前缓冲时间, 自动休息, 悬浮字幕开关, 签到, 森空岛小秘书, 字幕字号, 字幕颜色, 邮件设置, MAA设置
     保存配置()
     logger.info("开始运行")
     with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
@@ -2247,7 +2255,7 @@ def 开始运行():
     弹窗提醒 = True if 用户配置['弹窗提醒开关'] == '开' else False
     跑单提前运行时间 = 用户配置['跑单提前运行时间']
     更换干员前缓冲时间 = 用户配置['更换干员前缓冲时间']
-    龙舌兰和但书休息 = True if 用户配置['龙舌兰和但书休息'] == '开' else False
+    自动休息 = True if 用户配置['自动休息'] == '开' else False
     悬浮字幕开关 = True if 用户配置['悬浮字幕开关'] == '开' else False
     签到 = True if 用户配置['森空岛签到开关'] == '开' else False
     森空岛小秘书 = True if 用户配置['森空岛小秘书开关'] == '开' else False
@@ -2325,7 +2333,7 @@ with open(读取文件, 'r', encoding='utf-8') as 用户配置文件:
 弹窗提醒 = True if 用户配置['弹窗提醒开关'] == '开' else False
 跑单提前运行时间 = 用户配置['跑单提前运行时间']
 更换干员前缓冲时间 = 用户配置['更换干员前缓冲时间']
-龙舌兰和但书休息 = True if 用户配置['龙舌兰和但书休息'] == '开' else False
+自动休息 = True if 用户配置['自动休息'] == '开' else False
 悬浮字幕开关 = True if 用户配置['悬浮字幕开关'] == '开' else False
 签到 = True if 用户配置['森空岛签到开关'] == '开' else False
 森空岛小秘书 = True if 用户配置['森空岛小秘书开关'] == '开' else False
@@ -2417,10 +2425,10 @@ for 序号, 贸易站 in enumerate(跑单位置表):
 截图存储目录输入 = 界面.Entry(偏好运行设置, width=30, justify=LEFT)    ###
 截图存储目录输入.grid(row=1, column=1, padx=5, pady=5, columnspan=2, sticky=界面.W+E)
 截图存储目录输入.insert(0, 用户配置['截图存储目录'])
-界面.Label(偏好运行设置, text="每种截图的最大保存数量").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
-每种截图的最大保存数量输入 = 界面.Entry(偏好运行设置, width=30, justify=LEFT)    ###
-每种截图的最大保存数量输入.grid(row=2, column=1, padx=5, pady=5, columnspan=2, sticky=界面.W+E)
-每种截图的最大保存数量输入.insert(0, 用户配置['每种截图的最大保存数量'])
+界面.Label(偏好运行设置, text="每种截图的最大存储数量").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
+每种截图的最大存储数量输入 = 界面.Entry(偏好运行设置, width=30, justify=LEFT)    ###
+每种截图的最大存储数量输入.grid(row=2, column=1, padx=5, pady=5, columnspan=2, sticky=界面.W+E)
+每种截图的最大存储数量输入.insert(0, 用户配置['每种截图的最大存储数量'])
 
 # 提醒设置
 提醒设置 = 界面.LabelFrame(滚动区域[1], text="提醒设置", relief=界面.RIDGE, borderwidth=10)
@@ -2452,18 +2460,18 @@ if 用户配置['悬浮字幕开关'] == '开': 悬浮字幕开关输入.set(Tru
 邮件提醒开关输入 = 界面.BooleanVar(value=False)    ###
 if 用户配置['邮件设置']['邮件提醒开关'] == '开': 邮件提醒开关输入.set(True)
 界面.Checkbutton(邮件提醒, bootstyle="round-toggle", text="邮件提醒", variable=邮件提醒开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, padx=10, pady=5, sticky=界面.W)
-界面.Label(邮件提醒, text="发信邮箱", width=16).grid(row=1, column=0, padx=10, pady=5, sticky=界面.E)
-发信邮箱输入 = 界面.Entry(邮件提醒, width=30, justify=LEFT)    ###
-发信邮箱输入.grid(row=1, column=1, padx=5, pady=5, sticky=界面.W+E)
-发信邮箱输入.insert(0, 用户配置['邮件设置']['发信邮箱'])
+界面.Label(邮件提醒, text="发件邮箱", width=16).grid(row=1, column=0, padx=10, pady=5, sticky=界面.E)
+发件邮箱输入 = 界面.Entry(邮件提醒, width=30, justify=LEFT)    ###
+发件邮箱输入.grid(row=1, column=1, padx=5, pady=5, sticky=界面.W+E)
+发件邮箱输入.insert(0, 用户配置['邮件设置']['发件邮箱'])
 界面.Label(邮件提醒, text="授权码", width=16).grid(row=2, column=0, padx=10, pady=5, sticky=界面.E)
 授权码输入 = 界面.Entry(邮件提醒, width=30, justify=LEFT, show="●")    ###
 授权码输入.grid(row=2, column=1, padx=5, pady=5, sticky=界面.W+E)
 授权码输入.insert(0, 用户配置['邮件设置']['授权码'])
-界面.Label(邮件提醒, text="收件人邮箱", width=16).grid(row=3, column=0, padx=10, pady=5, sticky=界面.E)
-收件人邮箱输入 = 界面.Entry(邮件提醒, width=30, justify=LEFT)    ###
-收件人邮箱输入.grid(row=3, column=1, padx=5, pady=5, sticky=界面.W+E)
-收件人邮箱输入.insert(0, 用户配置['邮件设置']['收件人邮箱'][0])
+界面.Label(邮件提醒, text="收件邮箱", width=16).grid(row=3, column=0, padx=10, pady=5, sticky=界面.E)
+收件邮箱输入 = 界面.Entry(邮件提醒, width=30, justify=LEFT)    ###
+收件邮箱输入.grid(row=3, column=1, padx=5, pady=5, sticky=界面.W+E)
+收件邮箱输入.insert(0, 用户配置['邮件设置']['收件邮箱'][0])
 
 森空岛设置 = 界面.Frame(提醒设置, relief=界面.RIDGE, borderwidth=10)
 森空岛设置.grid(row=3, column=0, padx=10, pady=5, sticky=界面.W+E)
@@ -2478,7 +2486,7 @@ if 用户配置['悬浮字幕开关'] == '开': 森空岛小秘书开关输入.s
 登录凭证输入.grid(row=2, column=1, padx=5, pady=5, sticky=界面.W+E)
 登录凭证输入.insert(0, 用户配置['登录凭证'])
 界面.Label(森空岛设置, text="手机号", width=16).grid(row=3, column=0, padx=10, pady=5, sticky=界面.E)
-手机号输入 = 界面.Entry(森空岛设置, width=30, justify=LEFT)    ###
+手机号输入 = 界面.Entry(森空岛设置, width=30, justify=LEFT, show="●")    ###
 手机号输入.grid(row=3, column=1, padx=5, pady=5, sticky=界面.W+E)
 手机号输入.insert(0, 用户配置['手机号'])
 界面.Label(森空岛设置, text="密码", width=16).grid(row=4, column=0, padx=10, pady=5, sticky=界面.E)
@@ -2504,20 +2512,20 @@ if 用户配置['跑单消耗无人机开关'] == '开': 跑单消耗无人机�
 if 用户配置['任务结束后退出游戏'] == '是': 任务结束后退出游戏开关输入.set(True)
 界面.Checkbutton(跑单设置, bootstyle="round-toggle", text="任务结束后退出游戏", variable=任务结束后退出游戏开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=3, column=0, padx=10, pady=5, sticky=界面.W)
 
-# 龙舌兰和但书自动休息设置
-龙舌兰和但书自动休息设置 = 界面.LabelFrame(滚动区域[1], text="龙舌兰和但书自动休息设置", relief=界面.RIDGE, borderwidth=10)
-龙舌兰和但书自动休息设置.grid(row=1, column=1, sticky=界面.W+E+N+S, padx=10, pady=10)
-龙舌兰和但书自动休息开关输入 = 界面.BooleanVar(value=False)    ###
-if 用户配置['龙舌兰和但书休息'] == '开': 龙舌兰和但书自动休息开关输入.set(True)
-界面.Checkbutton(龙舌兰和但书自动休息设置, bootstyle="round-toggle", text="龙舌兰和但书自动休息", variable=龙舌兰和但书自动休息开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, columnspan=6, padx=10, pady=5, sticky=界面.W)
-界面.Label(龙舌兰和但书自动休息设置, text="门牌号").grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
-宿舍门牌号输入 = 界面.Entry(龙舌兰和但书自动休息设置, justify=LEFT, width=15)    ###
+# 自动休息设置
+自动休息设置 = 界面.LabelFrame(滚动区域[1], text="自动休息设置", relief=界面.RIDGE, borderwidth=10)
+自动休息设置.grid(row=1, column=1, sticky=界面.W+E+N+S, padx=10, pady=10)
+自动休息开关输入 = 界面.BooleanVar(value=False)    ###
+if 用户配置['自动休息'] == '开': 自动休息开关输入.set(True)
+界面.Checkbutton(自动休息设置, bootstyle="round-toggle", text="自动休息", variable=自动休息开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, columnspan=6, padx=10, pady=5, sticky=界面.W)
+界面.Label(自动休息设置, text="门牌号").grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
+宿舍门牌号输入 = 界面.Entry(自动休息设置, justify=LEFT, width=15)    ###
 宿舍门牌号输入.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky=界面.W)
 宿舍门牌号输入.insert(0, list(用户配置['宿舍设置'].keys())[0])
-界面.Label(龙舌兰和但书自动休息设置, text="干员安排").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
+界面.Label(自动休息设置, text="干员安排").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
 宿舍干员安排 = []
 for 序号 in range(5):
-    宿舍干员安排.append(界面.Entry(龙舌兰和但书自动休息设置, justify=LEFT, width=11))
+    宿舍干员安排.append(界面.Entry(自动休息设置, justify=LEFT, width=11))
     宿舍干员安排[序号].grid(row=2, column=序号+1, padx=5, pady=5, sticky=界面.W)
     宿舍干员安排[序号].insert(0, 用户配置['宿舍设置'][list(用户配置['宿舍设置'].keys())[0]][序号])
 
@@ -2607,7 +2615,112 @@ for 行号, 行 in enumerate(程序特点行列表):
 使用流程域.grid(row=2, column=0, sticky=界面.W+E+N+S, padx=10, pady=10)
 使用流程行列表 = 使用流程.split('\n')
 for 行号, 行 in enumerate(使用流程行列表): 界面.Label(使用流程域, text=行, font="微软雅黑 9 bold", foreground="indigo").grid(row=行号, column=0, padx=10, pady=5, sticky=界面.W)
-
+界面.Separator(滚动区域[2], bootstyle="dark").grid(row=3, column=0, padx=20, pady=5, sticky=界面.W+E)
+详细说明域 = 界面.Frame(滚动区域[2], relief=界面.RIDGE, borderwidth=0)
+详细说明域.grid(row=4, column=0, sticky=界面.W+E+N+S, padx=10, pady=10)
+界面.Label(详细说明域, text="Mower0的详细说明：", font="微软雅黑 9 bold", foreground="indigo").grid(row=0, column=0, padx=10, pady=5, sticky=界面.W)
+详细说明 = """◎ 主页
+● 基础运行设置
+♦ 服务器
+选择你所要跑单的账号所在服务器，提供“官方服务器”和“Bilibili服务器”两个选项。
+♦ adb地址
+以Windows系统为例，请按照以下步骤获取adb地址：
+1.先打开游戏所要运行的安卓模拟器或容器平台，等待其加载完成运行平稳。
+2.在模拟器的安装目录中搜索找到adb可执行文件的位置（一般命名为adb.exe或者HD-Adb.exe等）。
+3.在地址栏中输入cmd并按回车键，打开Windows命令提示符窗口。
+4.在新打开的窗口中输入adb devices并按回车，获取当前连接的安卓平台adb信息。
+5.正常情况下，窗口中输出内容固定第一行为List of devices attached，第二行起为所连接安卓平台的adb信息，每行以“adb地址+平台状态”的格式进行展示。
+如果你想要运行游戏的平台状态为devices，那么前面的adb地址就是要输入的部分。
+● 跑单位置设置
+1.其中每个框都代表一个贸易站，可以通过最下方的“+”或“-”按钮来新增贸易站或者减少贸易站。
+2.每个要跑单贸易站的门牌号，形式如“B101”，在游戏中进入该贸易站后画面的上方查询具体门牌号，请确保跟游戏中的贸易站一致。
+3.在每个贸易站中选择各个位置的跑单干员，提供“不跑单”、“龙舌兰”、“但书”三个选项。
+4.可以通过右侧的“+”按钮来增加要设置的位置，以保证跟游戏中的对应贸易站一致。
+● 森空岛干员查询
+该按钮仅在进阶设置中正确设置了森空岛信息才有效。
+点击该按钮就会展示出所设置账号的全部干员、干员等级、所开模组以及在该干员上消耗的龙门币、经验和二者比例，最后统计总计消耗的龙门币、经验和二者比例；
+同时在Mower0文件夹中生成一个森空岛干员阵容查询.csv文件，供后续拓展研究。
+● 保存配置
+当你在程序窗口中对设置进行了更改，保存配置可以让程序下一次按照新的设置来运行。
+● 停止运行
+中止Mower0在游戏中的所有任务。
+● 开始运行
+该按钮的功能是按顺序依次执行：
+1.首先自动进行一次保存配置。
+2.如果Mower0正在运行中，那么停止运行。
+3.开始运行Mower0。
+◎ 进阶设置
+● 偏好运行设置
+♦ 日志存储目录
+请输入存储Mower0运行日志的位置。
+♦ 截图存储目录
+请输入存储Mower0运行中截图的位置。
+♦ 每种截图的最大存储数量
+Mower0运行期间各类截图的存储数量上限，当存储数量到达该上限时，新截图存储时会从最早存储的该类截图开始删除。
+● 提醒设置
+♦ 弹窗提醒
+开启时，在读取跑单任务时间后会弹窗提醒相关信息
+♦ 悬浮字幕
+开启时，会以类似音乐软件的桌面歌词的形式出现一个置于顶层的悬浮提醒字幕，方便玩家在游戏中随时查看跑单任务剩余时间。
+在等待跑单的过程中内容是下次跑单的时间，当跑单任务临近，字幕内容会加一行“跑单即将开始”，提醒玩家尽快结束操作，交给Mower0进行跑单。
+在Mower0窗口中可以按照需要预设运行时字幕的字号、字体和颜色；在Mower0运行期间也可以将鼠标置于悬浮字幕上，通过滚轮向上和向下滚动来临时调节字幕放大和缩小。
+字体支持系统中已经安装的各种字体，预设为微软雅黑，颜色通过输入的16进制颜色代码来控制。
+♦ 邮件提醒
+开启时，在读取跑单任务时间后会通过发件邮箱向收件邮箱发送跑单任务时间以及一些来自于森空岛的基建状态信息。
+♦ 授权码
+在QQ邮箱“账户设置-账户-开启SMTP服务”中，按照指示开启服务获得授权码
+♦ 森空岛签到
+开启时，在运行Mower0时以及读取跑单任务后会查看今天是否已经进行过森空岛签到，如果今天没有进行过签到则进行签到。
+♦ 森空岛小秘书
+开启时，在等待跑单的空闲时间中，每6分钟通过登录凭证或者手机号和密码从森空岛获取当前理智、无人机数量、会客室线索、宿舍干员心情等信息，并将值得注意的信息进行提示。
+森空岛的信息有不定时间的延迟，窗口中汇报的信息会提供每次汇报信息的更新时间以及汇报时间。
+♦ 登录凭证
+先在电脑浏览器中输入网址 https://www.skland.com/ 并登录
+再输入网址 https://web-api.skland.com/account/info/hg/ 页面中"content":后引号中的一长串字符即是
+如果要使用森空岛小秘书却不想使用登录凭证，可以在登录凭证一栏填“否”，然后在手机号和密码填入账号的对应手机号和密码。
+● 跑单设置
+♦ 跑单提前运行时间
+读取接单时间后，为了能够及时完成跑单操作而在接单时间前提前开始跑单任务的时间长度。
+该时间越长，则跑单抵抗各种干扰的能力越强，越容易跑单成功，也能够兼容越差的硬件配置、网络状况等环境成功跑单。
+如果开启了无人机辅助跑单，那么跑单花费的无人机就会跟该时间成正比；如果没有开启无人机辅助跑单，那么Mower0进行操作的时间占比会跟该时间成正比。
+因此该时间最合理的值应该按照玩家的设备情况来量身定制，设备情况越好就可以设置越短的跑单提前运行时间。
+♦ 更换干员前缓冲时间
+跑单成功前的最后一步是选好但书、龙舌兰后点击确认按钮，但是点击之后需要与服务器进行一次数据交换才能成功换上。
+这次数据交换的时间直接受网络状况影响，因此更换干员前就要有充足的缓冲时间。
+该时间越长，则跑单抵抗网络干扰的能力越强，越容易跑单成功，不过但书、龙舌兰在贸易站工位中的时间也会越久，对效率的影响越严重，但书、龙舌兰需要恢复心情的需求越高。
+因此该时间最合理的值应该按照玩家的网络状况来量身定制，网络速度越快、越稳定就可以设置越短的更换干员前缓冲时间。
+♦ 无人机辅助跑单
+开启时，换上但书、龙舌兰后直接通过无人机加速清空当前订单剩余时间；如果关闭，会等待到当前订单完成。
+开启该选项能够降低Mower0的操作时间占比，但是会花费以及浪费一些无人机在加速贸易站上。
+♦ 任务结束后退出游戏
+开启时，在读取跑单时间后如果较长时间不需要Mower0进行操作，则关闭游戏。
+开启该选项能一定程度地节省由于安卓平台中运行游戏的资源占用，降低功耗，但是下次任务开始时需要进行的操作会变多，一定程度上会降低整个跑单系统的稳定性。
+● 自动休息设置
+开启时，在读取跑单时间后会按照设定将指定干员置于目标宿舍中休息。
+♦ 门牌号
+干员休息的目标宿舍门牌号，形式如“B101”，在游戏中进入该贸易站后画面的上方查询具体门牌号，请确保跟游戏中的贸易站一致。
+♦ 干员安排
+每个位置都可以填写指定干员的代号，如“但书”、“龙舌兰”、“菲亚梅塔”等，会按照所填干员在对应位置换上休息，也可以填写“当前休息干员”，保持该位置干员不变。
+● MAA作战设置
+开启后，Mower0在跑单之余会调用MAA进行作战，当跑单任务临近，Mower0会优先处理跑单任务。
+♦ MAA路径
+填写MAA.exe所在的位置路径，如“D:/MAA”
+♦ MAA adb路径
+填写MAA设置中自动识别出来的adb路径
+♦ 集成战略
+开启后，会在跑单间隔优先进行集成战略作战，可以指定集成战略主题、分队、开局组合、开局干员、策略模式
+♦ 消耗理智关卡
+当“MAA作战”选项开启，而“集成战略”选项关闭时，会在跑单间隔对目标消耗理智关卡持续进行反复作战，直到理智不足为止。
+♦ 每次MAA使用理智药数量
+在每次调用MAA过程中，由于理智不足时会使用的理智药上限。注意在新的跑单间隔中重新调用MAA会重新计算所使用的理智药。
+"""
+详细说明行列表 = 详细说明.split('\n')
+for 行号, 行 in enumerate(详细说明行列表):
+    if len(行) == 0: continue
+    elif 行[0] == "◎": 界面.Label(详细说明域, text=行, font="微软雅黑 9 bold").grid(row=行号+1, column=0, padx=10, pady=5, sticky=界面.W)
+    elif 行[0] == "●": 界面.Label(详细说明域, text=行, font="微软雅黑 9 bold", foreground="mediumpurple").grid(row=行号+1, column=0, padx=10, pady=5, sticky=界面.W)
+    elif 行[0] == "♦": 界面.Label(详细说明域, text=行, foreground="mediumpurple").grid(row=行号+1, column=0, padx=10, pady=5, sticky=界面.W)
+    else: 界面.Label(详细说明域, text=行).grid(row=行号+1, column=0, padx=10, pady=5, sticky=界面.W)
 
 托盘菜单 = (
     MenuItem(任务提示, 跑单任务查询, default=True, visible=False),
@@ -2633,7 +2746,7 @@ if 悬浮字幕开关:
     字幕窗口.withdraw()
     窗口宽度 = 字幕窗口.winfo_screenwidth()
     窗口高度 = 字幕窗口.winfo_screenheight()
-    字幕字号 = 窗口高度 // 24
+    字幕字号 = 窗口高度 // 40
     字幕窗口.geometry("%dx%d+%d+%d" % (窗口宽度, 窗口高度, (字幕窗口.winfo_screenwidth() - 窗口宽度) / 2,
                                    字幕窗口.winfo_screenheight() * 3 / 4 - 窗口高度 / 2))
     字幕窗口.overrideredirect(True)
