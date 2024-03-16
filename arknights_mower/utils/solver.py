@@ -125,7 +125,7 @@ class BaseSolver:
         return True
 
     def tap_themed_element(self, name):
-        themes = ["dark", "sami", "ep13"]
+        themes = ["dark", "sami", "ep13", "rainbow6"]
         themed_names = [name] + ["_".join([name, t]) for t in themes]
         for i in themed_names:
             try:
@@ -212,10 +212,8 @@ class BaseSolver:
                     self.tap((self.recog.w // 2, self.recog.h - 10), 3)
                 elif self.scene() == Scene.LOGIN_NEW:
                     self.tap(self.find('login_new', score=0.8))
-                elif self.scene() == Scene.LOGIN_BILIBILI:
-                    self.tap(self.find('login_bilibili_entry', score=0.6))
-                elif self.scene() == Scene.LOGIN_BILIBILI_PRIVACY:
-                    self.tap(self.find('login_bilibili_privacy_accept', score=0.6))
+                elif self.scene() == Scene.LOGIN_NEW_B:
+                    self.tap(self.find('login_bilibili_new', score=0.8))
                 elif self.scene() == Scene.LOGIN_QUICKLY:
                     self.tap_element('login_awake')
                 elif self.scene() == Scene.LOGIN_MAIN:
@@ -247,6 +245,8 @@ class BaseSolver:
                     self.waiting_solver(Scene.LOGIN_MAIN_NOENTRY)
                 elif self.scene() == Scene.LOGIN_CADPA_DETAIL:
                     self.back(2)
+                elif self.scene() == Scene.LOGIN_BILIBILI:
+                    self.tap_element('login_bilibili_entry')
                 elif self.scene() == Scene.NETWORK_CHECK:
                     self.tap_element('double_confirm', 0.2)
                 elif self.scene() == Scene.UNKNOWN:
@@ -389,7 +389,7 @@ class BaseSolver:
         if loop_count == 8:
             return "保全派驻导航失败"
 
-    def waiting_solver(self, scenes, wait_count=20, sleep_time=3):
+    def waiting_solver(self, scenes, wait_count=20, sleep_time=3, 服务器="com.hypergryph.arknights"):
         """需要等待的页面解决方法。触发超时重启会返回False
         """
         while wait_count > 0:
@@ -398,7 +398,7 @@ class BaseSolver:
                 return True
             wait_count -= 1
         logger.warning("同一等待界面等待超时，重启方舟。")
-        self.device.exit(self.package_name)
+        self.device.exit(服务器)
         time.sleep(3)
         self.device.check_current_focus()
         return False
