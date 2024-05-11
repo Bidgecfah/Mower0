@@ -212,8 +212,10 @@ class BaseSolver:
                     self.tap((self.recog.w // 2, self.recog.h - 10), 3)
                 elif self.scene() == Scene.LOGIN_NEW:
                     self.tap(self.find('login_new', score=0.8))
-                elif self.scene() == Scene.LOGIN_NEW_B:
-                    self.tap(self.find('login_bilibili_new', score=0.8))
+                elif self.scene() == Scene.LOGIN_BILIBILI:
+                    self.tap(self.find('login_bilibili_entry', score=0.6))
+                elif self.scene() == Scene.LOGIN_BILIBILI_PRIVACY:
+                    self.tap(self.find('login_bilibili_privacy_accept', score=0.6))
                 elif self.scene() == Scene.LOGIN_QUICKLY:
                     self.tap_element('login_awake')
                 elif self.scene() == Scene.LOGIN_MAIN:
@@ -245,8 +247,6 @@ class BaseSolver:
                     self.waiting_solver(Scene.LOGIN_MAIN_NOENTRY)
                 elif self.scene() == Scene.LOGIN_CADPA_DETAIL:
                     self.back(2)
-                elif self.scene() == Scene.LOGIN_BILIBILI:
-                    self.tap_element('login_bilibili_entry')
                 elif self.scene() == Scene.NETWORK_CHECK:
                     self.tap_element('double_confirm', 0.2)
                 elif self.scene() == Scene.UNKNOWN:
