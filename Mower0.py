@@ -1164,7 +1164,7 @@ class 项目经理(BaseSolver):
             if 关卡 == '上一次作战': 关卡 = ''
             self.MAA.append_task('Fight', {
                 'stage': 关卡,
-                'medicine': int(MAA设置['使用理智药数量']),
+                'medicine': int(MAA设置['每次MAA使用理智药数量']),
                 'stone': 0,
                 'times': 999,
                 'report_to_penguin': True,
@@ -2236,7 +2236,7 @@ def 保存配置():
         用户配置['MAA设置']['集成战略开局招募组合'] = 集成战略开局招募组合输入.get()
         用户配置['MAA设置']['集成战略策略模式'] = 集成战略策略模式输入.get()
         用户配置['MAA设置']['消耗理智关卡'] = 消耗理智关卡输入.get()
-        用户配置['MAA设置']['每次MAA使用理智药数量'] = 每次MAA使用理智药数量输入.get()
+        用户配置['MAA设置']['每次MAA使用理智药数量'] = int(每次MAA使用理智药数量输入.get() or 0)
     except:
         logger.error("请在所有设置填写完整而合理后再保存配置")
         return
@@ -2579,7 +2579,7 @@ if 用户配置['MAA设置']['集成战略'] == '开': 集成战略开关输入.
 界面.Label(MAA作战设置, text="每次MAA使用理智药数量").grid(row=18, column=0, padx=10, pady=5, sticky=界面.W)
 每次MAA使用理智药数量输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
 每次MAA使用理智药数量输入.grid(row=18, column=1, padx=5, pady=5, sticky=界面.W)
-每次MAA使用理智药数量输入.insert(0, 用户配置['MAA设置']['使用理智药数量'])
+每次MAA使用理智药数量输入.insert(0, 用户配置['MAA设置']['每次MAA使用理智药数量'])
 
 # 使用说明
 程序特点 = """欢迎博士使用Mower0！
