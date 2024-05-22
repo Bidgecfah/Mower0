@@ -1139,7 +1139,7 @@ class 项目经理(BaseSolver):
                 logger.info(f"关卡掉落: {物品名称} × {物品数量}")
 
     def MAA初始化(self):
-        MAA路径 = pathlib.Path(self.MAA设置['MAA路径'])
+        MAA路径 = pathlib.Path(用户配置['MAA设置']['MAA路径'])
         if MAA路径.suffix == '.exe':
             MAA路径 = MAA路径.parent
         asst_path = os.path.dirname(MAA路径 / "Python" / "asst")
@@ -1149,10 +1149,10 @@ class 项目经理(BaseSolver):
         global Message
         from asst.utils import Message
 
-        Asst.load(path=self.MAA设置['MAA路径'])
+        Asst.load(path=用户配置['MAA设置']['MAA路径'])
         self.MAA = Asst(callback=self.MAA日志)
         self.关卡列表 = []
-        if self.MAA.connect(self.MAA设置['MAA_adb路径'], self.device.client.device_id): logger.info("MAA 连接成功")
+        if self.MAA.connect(用户配置['MAA设置']['MAA_adb路径'], self.device.client.device_id): logger.info("MAA 连接成功")
         else:
             logger.info("MAA 连接失败")
             raise Exception("MAA 连接失败")
@@ -1160,11 +1160,11 @@ class 项目经理(BaseSolver):
     def 添加MAA任务(self, type):
         if type in ['StartUp', 'Visit', 'Award']: self.MAA.append_task(type)
         elif type == 'Fight':
-            关卡 = self.MAA设置['消耗理智关卡']
+            关卡 = 用户配置['MAA设置']['消耗理智关卡']
             if 关卡 == '上一次作战': 关卡 = ''
             self.MAA.append_task('Fight', {
                 'stage': 关卡,
-                'medicine': int(MAA设置['每次MAA使用理智药数量']),
+                'medicine': int(用户配置['MAA设置']['每次MAA使用理智药数量']),
                 'stone': 0,
                 'times': 999,
                 'report_to_penguin': True,
@@ -1205,30 +1205,30 @@ class 项目经理(BaseSolver):
             self.MAA初始化()
             if 任务列表 == 'All': 任务列表 = ['StartUp', 'Fight', 'Recruit', 'Visit', 'Mall', 'Award']
 
-            if self.MAA设置['集成战略'] == '开' or self.MAA设置['生息演算'] == '开':
+            if 用户配置['MAA设置']['集成战略'] == '开' or 用户配置['MAA设置']['生息演算'] == '开':
                 while (self.任务列表[0].time - datetime.now()).total_seconds() > 30:
                     self.MAA = None
                     self.MAA初始化()
                     主题 = str()
-                    if self.MAA设置['集成战略'] == '开':
-                        if self.MAA设置['集成战略主题'] == '傀影与猩红孤钻': 主题 = 'Phantom'
-                        elif self.MAA设置['集成战略主题'] == '水月与深蓝之树': 主题 = 'Mizuki'
-                        elif self.MAA设置['集成战略主题'] == '探索者的银凇止境': 主题 = 'Sami'
+                    if 用户配置['MAA设置']['集成战略'] == '开':
+                        if 用户配置['MAA设置']['集成战略主题'] == '傀影与猩红孤钻': 主题 = 'Phantom'
+                        elif 用户配置['MAA设置']['集成战略主题'] == '水月与深蓝之树': 主题 = 'Mizuki'
+                        elif 用户配置['MAA设置']['集成战略主题'] == '探索者的银凇止境': 主题 = 'Sami'
                         self.MAA.append_task('Roguelike', {
                             'theme': 主题,
-                            'mode': int(self.MAA设置['集成战略策略模式']),
+                            'mode': int(用户配置['MAA设置']['集成战略策略模式']),
                             'starts_count': 9999999,
                             'investment_enabled': True,
                             'investments_count': 9999999,
                             'stop_when_investment_full': False,
-                            'squad': self.MAA设置['集成战略分队'],
-                            'roles': self.MAA设置['集成战略开局招募组合'],
-                            'core_char': self.MAA设置['集成战略开局干员']
+                            'squad': 用户配置['MAA设置']['集成战略分队'],
+                            'roles': 用户配置['MAA设置']['集成战略开局招募组合'],
+                            'core_char': 用户配置['MAA设置']['集成战略开局干员']
                         })
-                    elif self.MAA设置['生息演算'] == '开':
+                    elif 用户配置['MAA设置']['生息演算'] == '开':
                         self.back_to_reclamation_algorithm()
                         self.MAA.append_task('ReclamationAlgorithm')
-                    # elif self.MAA设置['保全派驻'] :
+                    # elif 用户配置['MAA设置']['保全派驻'] :
                     #     self.MAA.append_task('SSSCopilot', {
                     #         'filename': "F:\\MAA-v4.10.5-win-x64\\resource\\copilot\\SSS_阿卡胡拉丛林.json",
                     #         'formation': False,
@@ -1390,7 +1390,6 @@ def 初始化(任务列表, scheduler=None):
         当前项目.MAA = None
         当前项目.邮件设置 = 邮件设置
         当前项目.ADB_CONNECT = config.ADB_CONNECT[0]
-        当前项目.MAA设置 = MAA设置
         当前项目.error = False
         当前项目.跑单提前运行时间 = 跑单提前运行时间
         当前项目.更换干员前缓冲时间 = 更换干员前缓冲时间
@@ -1469,7 +1468,7 @@ class 线程(threading.Thread):
                                          f'开始跑单的时间为 {任务列表[任务序号].time.strftime("%H:%M:%S")}\n')
 
                         # 如果有高强度重复MAA任务,任务间隔超过10分钟则启动MAA
-                        if MAA设置['作战开关'] == '开' and (任务间隔 > 600): 当前项目.MAA任务调度器()
+                        if 用户配置['MAA设置']['作战开关'] == '开' and (任务间隔 > 600): 当前项目.MAA任务调度器()
                         else:
                             if 用户配置['任务结束后退出游戏'] == '是' and 任务间隔 > 跑单提前运行时间:
                                 try:
@@ -1557,17 +1556,22 @@ def 停止运行Mower0():
         延迟运行Mower0线程.cancel()
     except NameError:
         pass
+    停止运行MAA()
     while not Mower0线程.stopped():
         try:
             字幕窗口.withdraw()
             Mower0线程._stop_event.set()
             终止线程报错(Mower0线程.ident, SystemExit)
         except: pass
+    logger.warning('Mower0已停止')
+
+
+def 停止运行MAA():
     try:
         当前项目.MAA.stop()
+        logger.warning('MAA已停止')
     except Exception:
         pass
-    logger.warning('Mower0已停止')
 
 
 def 退出Mower0(): os.kill(os.getpid(), 9)
@@ -2246,7 +2250,7 @@ def 保存配置():
 
 
 def 开始运行():
-    global 初启动, Mower0线程, 服务器, 弹窗提醒, 跑单提前运行时间, 更换干员前缓冲时间, 自动休息, 悬浮字幕开关, 签到, 森空岛小秘书, 字幕字号, 字幕颜色, 邮件设置, MAA设置
+    global 初启动, Mower0线程, 服务器, 弹窗提醒, 跑单提前运行时间, 更换干员前缓冲时间, 自动休息, 悬浮字幕开关, 签到, 森空岛小秘书, 字幕字号, 字幕颜色, 邮件设置
     保存配置()
     logger.info("开始运行")
     with open('Mower0用户配置文件.yaml', 'r', encoding='utf-8') as 用户配置文件:
@@ -2262,7 +2266,6 @@ def 开始运行():
     if not 用户配置['字幕字号'] == '默认': 字幕字号 = int(用户配置['字幕字号'])
     字幕颜色 = 用户配置['字幕颜色']
     邮件设置 = 用户配置['邮件设置']
-    MAA设置 = 用户配置['MAA设置']
     config.ADB_DEVICE = [用户配置['adb地址']]
     config.ADB_CONNECT = [用户配置['adb地址']]
     config.APPNAME = 服务器
@@ -2340,7 +2343,6 @@ with open(读取文件, 'r', encoding='utf-8') as 用户配置文件:
 if not 用户配置['字幕字号'] == '默认': 字幕字号 = int(用户配置['字幕字号'])
 字幕颜色 = 用户配置['字幕颜色']
 邮件设置 = 用户配置['邮件设置']
-MAA设置 = 用户配置['MAA设置']
 
 窗口 = 界面.Window(title="Mower0", themename="minty", iconphoto="元素/图标.png", size=(1550, 1000), minsize=(0, 0))
 窗口.protocol("WM_DELETE_WINDOW", 窗口.withdraw)
@@ -2735,6 +2737,7 @@ for 行号, 行 in enumerate(详细说明行列表):
     MenuItem('停止运行Mower0', 停止运行Mower0, visible=True),
     MenuItem('10分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 10*60), visible=True),
     MenuItem('20分钟后重新运行Mower0', functools.partial(延迟运行Mower0, 20*60), visible=True),
+    MenuItem('停止运行MAA', 停止运行MAA, visible=True),
     Menu.SEPARATOR,
     MenuItem('退出Mower0', 退出Mower0)
 )
