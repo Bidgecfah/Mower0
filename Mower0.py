@@ -1,9 +1,11 @@
 from __future__ import annotations
+import base64
 import copy
 import csv
 import ctypes
 import colorlog
 import cv2
+import gzip
 import functools
 import hashlib
 import hmac
@@ -19,6 +21,7 @@ import smtplib
 import sys
 import threading
 import time
+import uuid
 import warnings
 import yaml
 from bs4 import BeautifulSoup
@@ -41,6 +44,12 @@ from arknights_mower.utils.scheduler_task import SchedulerTask
 from arknights_mower.utils.solver import BaseSolver
 from arknights_mower.utils.recognize import Recognizer, RecognizeError
 from ctypes import CFUNCTYPE, c_int, c_char_p, c_void_p
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
+from cryptography.hazmat.primitives.ciphers.base import Cipher
+from cryptography.hazmat.primitives.ciphers.modes import CBC, ECB
 from logging.handlers import RotatingFileHandler
 import ttkbootstrap as 界面
 from ttkbootstrap.constants import *
@@ -68,10 +77,10 @@ class 干员排序方式(Enum):
 
 
 干员排序方式位置 = {
-    干员排序方式.工作状态: (1560 / 2496, 96 / 1404),
-    干员排序方式.技能: (1720 / 2496, 96 / 1404),
-    干员排序方式.心情: (1880 / 2496, 96 / 1404),
-    干员排序方式.信赖值: (2050 / 2496, 96 / 1404),
+    干员排序方式.工作状态: (7 / 10, 3 / 50),
+    干员排序方式.技能: (3 / 4, 3 / 50),
+    干员排序方式.心情: (4 / 5, 3 / 50),
+    干员排序方式.信赖值: (2050 / 2496, 3 / 50),
 }
 
 BASIC_FORMAT = '%(asctime)s - %(levelname)s - %(relativepath)s:%(lineno)d - %(funcName)s - %(message)s'
@@ -388,11 +397,11 @@ class 项目经理(BaseSolver):
                         else: self.进入房间(房间)
                     length = len(工位表[房间])
                     名字位置 = [((self.recog.w * 1460 // 1920, self.recog.h * 155 // 1080),
-                                 (self.recog.w * 1700 // 1920, self.recog.h * 210 // 1080)),
+                                 (self.recog.w * 1800 // 1920, self.recog.h * 210 // 1080)),
                                 ((self.recog.w * 1460 // 1920, self.recog.h * 370 // 1080),
-                                 (self.recog.w * 1700 // 1920, self.recog.h * 420 // 1080)),
+                                 (self.recog.w * 1800 // 1920, self.recog.h * 420 // 1080)),
                                 ((self.recog.w * 1460 // 1920, self.recog.h * 585 // 1080),
-                                 (self.recog.w * 1700 // 1920, self.recog.h * 630 // 1080))]
+                                 (self.recog.w * 1800 // 1920, self.recog.h * 630 // 1080))]
                     该贸易站干员名单 = ''
                     for i in range(0, length):
                         读取到的干员名 = self.读取屏幕(self.recog.img[名字位置[i][0][1]:名字位置[i][1][1],
@@ -1230,9 +1239,9 @@ class 项目经理(BaseSolver):
                 邮箱.quit()
                 break
             except Exception as e:
-                # 日志.error("邮件发送失败")
-                # 日志.exception(e)
-                # 重试次数 -= 1
+                日志.error("邮件发送失败")
+                日志.exception(e)
+                重试次数 -= 1
                 time.sleep(1)
                 pass
 
@@ -1480,16 +1489,16 @@ def 开始运行():
         用户配置['宿舍设置'][宿舍门牌号输入.get()] = []
         for 序号 in range(5):
             用户配置['宿舍设置'][宿舍门牌号输入.get()].append(宿舍干员安排[序号].get())
-        用户配置['MAA设置']['作战开关'] = '开' if MAA作战开关输入.get() else '关'
-        用户配置['MAA设置']['MAA路径'] = MAA路径输入.get()
-        用户配置['MAA设置']['MAA_adb路径'] = MAA_adb路径输入.get()
-        用户配置['MAA设置']['集成战略'] = '开' if 集成战略开关输入.get() else '关'
-        用户配置['MAA设置']['集成战略主题'] = 集成战略主题输入.get()
-        用户配置['MAA设置']['集成战略分队'] = 集成战略分队输入.get()
-        用户配置['MAA设置']['集成战略开局招募组合'] = 集成战略开局招募组合输入.get()
-        用户配置['MAA设置']['集成战略策略模式'] = 集成战略策略模式输入.get()
-        用户配置['MAA设置']['消耗理智关卡'] = 消耗理智关卡输入.get()
-        用户配置['MAA设置']['每次MAA使用理智药数量'] = 每次MAA使用理智药数量输入.get()
+        # 用户配置['MAA设置']['作战开关'] = '开' if MAA作战开关输入.get() else '关'
+        # 用户配置['MAA设置']['MAA路径'] = MAA路径输入.get()
+        # 用户配置['MAA设置']['MAA_adb路径'] = MAA_adb路径输入.get()
+        # 用户配置['MAA设置']['集成战略'] = '开' if 集成战略开关输入.get() else '关'
+        # 用户配置['MAA设置']['集成战略主题'] = 集成战略主题输入.get()
+        # 用户配置['MAA设置']['集成战略分队'] = 集成战略分队输入.get()
+        # 用户配置['MAA设置']['集成战略开局招募组合'] = 集成战略开局招募组合输入.get()
+        # 用户配置['MAA设置']['集成战略策略模式'] = 集成战略策略模式输入.get()
+        # 用户配置['MAA设置']['消耗理智关卡'] = 消耗理智关卡输入.get()
+        # 用户配置['MAA设置']['每次MAA使用理智药数量'] = 每次MAA使用理智药数量输入.get()
     except:
         日志.error("请在所有设置填写完整而合理后再运行")
         return
@@ -1607,6 +1616,309 @@ def 跑单任务查询(icon: pystray.Icon): icon.notify(任务提示, "Mower0跑
     238946, 250642, 262880, 275762, 289105, 303264, 318252, 334080, 350761, 368306, 386728, 406039, 426252, 447378,
     469470, 493192, 518572, 545637, 574415, 604934, 637221, 671304, 707210, 744955]
 
+# 查询dId请求头
+devices_info_url = "https://fp-it.portal101.cn/deviceprofile/v4"
+
+# 数美配置
+SM_CONFIG = {
+    "organization": "UWXspnCCJN4sfYlNfqps",
+    "appId": "default",
+    "publicKey": "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCmxMNr7n8ZeT0tE1R9j/mPixoinPkeM+k4VGIn/s0k7N5rJAfnZ0eMER+QhwFvshzo0LNmeUkpR8uIlU/GEVr8mN28sKmwd2gpygqj0ePnBmOW4v0ZVwbSYK+izkhVFk2V/doLoMbWy6b+UnA8mkjvg0iYWRByfRsK2gdl7llqCwIDAQAB",
+    "protocol": "https",
+    "apiHost": "fp-it.portal101.cn"
+}
+
+PK = serialization.load_der_public_key(base64.b64decode(SM_CONFIG['publicKey']))
+
+DES_RULE = {
+    "appId": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "uy7mzc4h",
+        "obfuscated_name": "xx"
+    },
+    "box": {
+        "is_encrypt": 0,
+        "obfuscated_name": "jf"
+    },
+    "canvas": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "snrn887t",
+        "obfuscated_name": "yk"
+    },
+    "clientSize": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "cpmjjgsu",
+        "obfuscated_name": "zx"
+    },
+    "organization": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "78moqjfc",
+        "obfuscated_name": "dp"
+    },
+    "os": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "je6vk6t4",
+        "obfuscated_name": "pj"
+    },
+    "platform": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "pakxhcd2",
+        "obfuscated_name": "gm"
+    },
+    "plugins": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "v51m3pzl",
+        "obfuscated_name": "kq"
+    },
+    "pmf": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "2mdeslu3",
+        "obfuscated_name": "vw"
+    },
+    "protocol": {
+        "is_encrypt": 0,
+        "obfuscated_name": "protocol"
+    },
+    "referer": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "y7bmrjlc",
+        "obfuscated_name": "ab"
+    },
+    "res": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "whxqm2a7",
+        "obfuscated_name": "hf"
+    },
+    "rtype": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "x8o2h2bl",
+        "obfuscated_name": "lo"
+    },
+    "sdkver": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "9q3dcxp2",
+        "obfuscated_name": "sc"
+    },
+    "status": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "2jbrxxw4",
+        "obfuscated_name": "an"
+    },
+    "subVersion": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "eo3i2puh",
+        "obfuscated_name": "ns"
+    },
+    "svm": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "fzj3kaeh",
+        "obfuscated_name": "qr"
+    },
+    "time": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "q2t3odsk",
+        "obfuscated_name": "nb"
+    },
+    "timezone": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "1uv05lj5",
+        "obfuscated_name": "as"
+    },
+    "tn": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "x9nzj1bp",
+        "obfuscated_name": "py"
+    },
+    "trees": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "acfs0xo4",
+        "obfuscated_name": "pi"
+    },
+    "ua": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "k92crp1t",
+        "obfuscated_name": "bj"
+    },
+    "url": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "y95hjkoo",
+        "obfuscated_name": "cf"
+    },
+    "version": {
+        "is_encrypt": 0,
+        "obfuscated_name": "version"
+    },
+    "vpw": {
+        "cipher": "DES",
+        "is_encrypt": 1,
+        "key": "r9924ab5",
+        "obfuscated_name": "ca"
+    }
+}
+
+BROWSER_ENV = {
+    'plugins': 'MicrosoftEdgePDFPluginPortableDocumentFormatinternal-pdf-viewer1,MicrosoftEdgePDFViewermhjfbmdgcfjbbpaeojofohoefgiehjai1',
+    'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0',
+    'canvas': '259ffe69',  # 基于浏览器的canvas获得的值，不知道复用行不行
+    'timezone': -480,  # 时区，应该是固定值吧
+    'platform': 'Win32',
+    'url': 'https://www.skland.com/',  # 固定值
+    'referer': '',
+    'res': '1920_1080_24_1.25',  # 屏幕宽度_高度_色深_window.devicePixelRatio
+    'clientSize': '0_0_1080_1920_1920_1080_1920_1080',
+    'status': '0011',  # 不知道在干啥
+}
+
+
+# // 将浏览器环境对象的key全部排序，然后对其所有的值及其子对象的值加入数字并字符串相加。若值为数字，则乘以10000(0x2710)再将其转成字符串存入数组,最后再做md5,存入tn变量（tn变量要做加密）
+# //把这个对象用加密规则进行加密，然后对结果做GZIP压缩（结果是对象，应该有序列化），最后做AES加密（加密细节目前不清除），密钥为变量priId
+# //加密规则：新对象的key使用相对应加解密规则的obfuscated_name值，value为字符串化后进行进行DES加密，再进行btoa加密
+
+# 通过测试
+def _DES(o: dict):
+    result = {}
+    for i in o.keys():
+        if i in DES_RULE.keys():
+            rule = DES_RULE[i]
+            res = o[i]
+            if rule['is_encrypt'] == 1:
+                c = Cipher(TripleDES(rule['key'].encode('utf-8')), ECB())
+                data = str(res).encode('utf-8')
+                # 补足字节
+                data += b'\x00' * 8
+                res = base64.b64encode(c.encryptor().update(data)).decode('utf-8')
+            result[rule['obfuscated_name']] = res
+        else:
+            result[i] = o[i]
+    return result
+
+
+# 通过测试
+def _AES(v: bytes, k: bytes):
+    iv = '0102030405060708'
+    key = AES(k)
+    c = Cipher(key, CBC(iv.encode('utf-8')))
+    c.encryptor()
+    # 填充明文
+    v += b'\x00'
+    while len(v) % 16 != 0:
+        v += b'\x00'
+    return c.encryptor().update(v).hex()
+
+
+def GZIP(o: dict):
+    # 这个压缩结果似乎和前台不太一样,不清楚是否会影响
+    json_str = json.dumps(o, ensure_ascii=False)
+    stream = gzip.compress(json_str.encode('utf-8'), 2, mtime=0)
+    return base64.b64encode(stream)
+
+
+# 获得tn的值,后续做DES加密用
+# 通过测试
+def get_tn(o: dict):
+    sorted_keys = sorted(o.keys())
+
+    result_list = []
+
+    for i in sorted_keys:
+        v = o[i]
+        if isinstance(v, (int, float)):
+            v = str(v * 10000)
+        elif isinstance(v, dict):
+            v = get_tn(v)
+        result_list.append(v)
+    return ''.join(result_list)
+
+
+def get_smid():
+    t = time.localtime()
+    _time = '{}{:0>2d}{:0>2d}{:0>2d}{:0>2d}{:0>2d}'.format(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min,
+                                                           t.tm_sec)
+    uid = str(uuid.uuid4())
+    v = _time + hashlib.md5(uid.encode('utf-8')).hexdigest() + '00'
+    smsk_web = hashlib.md5(('smsk_web_' + v).encode('utf-8')).hexdigest()[0:14]
+    return v + smsk_web + '0'
+
+
+def get_d_id():
+    # storageName = '.thumbcache_' + md5(SM_CONFIG['organization']) // 用于从本地存储获得值
+    # uid = uuid()
+    # priId=md5(uid)[0:16]
+    # ep=rsa(uid,publicKey)
+    # SMID = localStorage.get(storageName);// 获得本地存储存的值
+    # _0x30b2eb为递归md5
+
+    uid = str(uuid.uuid4()).encode('utf-8')
+    priId = hashlib.md5(uid).hexdigest()[0:16]
+    # ep不一定对，先走走看
+    ep = PK.encrypt(uid, padding.PKCS1v15())
+    ep = base64.b64encode(ep).decode('utf-8')
+
+    browser = BROWSER_ENV.copy()
+    current_time = int(time.time() * 1000)
+    browser.update({
+        'vpw': str(uuid.uuid4()),
+        'svm': current_time,
+        'trees': str(uuid.uuid4()),
+        'pmf': current_time
+    })
+
+    des_target = {
+        **browser,
+        'protocol': 102,
+        'organization': SM_CONFIG['organization'],
+        'appId': SM_CONFIG['appId'],
+        'os': 'web',
+        'version': '3.0.0',
+        'sdkver': '3.0.0',
+        'box': '',  # 似乎是个SMID，但是第一次的时候是空,不过不影响结果
+        'rtype': 'all',
+        'smid': get_smid(),
+        'subVersion': '1.0.0',
+        'time': 0
+    }
+    des_target['tn'] = hashlib.md5(get_tn(des_target).encode()).hexdigest()
+
+    des_result = _AES(GZIP(_DES(des_target)), priId.encode('utf-8'))
+
+    response = requests.post(devices_info_url, json={
+        'appId': 'default',
+        'compress': 2,
+        'data': des_result,
+        'encode': 5,
+        'ep': ep,
+        'organization': SM_CONFIG['organization'],
+        'os': 'web'  # 固定值
+    })
+
+    resp = response.json()
+    if resp['code'] != 1100:
+        raise Exception("did计算失败，请联系作者")
+    # 开头必须是B
+    return 'B' + resp['detail']['deviceId']
+
+http_local = threading.local()
 header = {
     'cred': '',
     'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
@@ -1616,7 +1928,8 @@ header = {
 header_login = {
     'User-Agent': 'Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 31; ) Okhttp/4.11.0',
     'Accept-Encoding': 'gzip',
-    'Connection': 'close'
+    'Connection': 'close',
+    'dId': get_d_id()
 }
 
 # 签名请求头一定要这个顺序，否则失败
@@ -1652,16 +1965,15 @@ def generate_signature(token: str, path, body_or_query):
     return md5, header_ca
 
 
-def get_sign_header(url: str, method, body, old_header, sign_token):
-    h = json.loads(json.dumps(old_header))
+def get_sign_header(url: str, method, body, h):
     p = parse.urlparse(url)
     if method.lower() == 'get':
-        h['sign'], header_ca = generate_signature(sign_token, p.path, p.query)
+        h['sign'], header_ca = generate_signature(http_local.token, p.path, p.query)
     else:
-        h['sign'], header_ca = generate_signature(sign_token, p.path, json.dumps(body))
-    for i in header_ca: h[i] = header_ca[i]
+        h['sign'], header_ca = generate_signature(http_local.token, p.path, json.dumps(body))
+    for i in header_ca:
+        h[i] = header_ca[i]
     return h
-
 
 def login_by_password():
     r = requests.post("https://as.hypergryph.com/user/auth/v1/token_by_phone_password",
@@ -1692,7 +2004,7 @@ def get_grant_code(token):
 
 
 def get_cred(grant):
-    resp = requests.post("https://zonai.skland.com/api/v1/user/auth/generate_cred_by_code", json={
+    resp = requests.post("https://zonai.skland.com/web/v1/user/auth/generate_cred_by_code", json={
         'code': grant,
         'kind': 1
     }, headers=header_login).json()
@@ -1700,19 +2012,19 @@ def get_cred(grant):
     return resp['data']
 
 
-def get_binding_list(sign_token):
+def get_binding_list():
     v = []
     resp = requests.get("https://zonai.skland.com/api/v1/game/player/binding",
                         headers=get_sign_header("https://zonai.skland.com/api/v1/game/player/binding",
-                                                'get', None, header, sign_token)).json()
-
-    if not resp['code'] == 0:
-        日志.warning(f"请求角色列表出现问题：{resp['message']}")
+                                                'get', None, http_local.header)).json()
+    if resp['code'] != 0:
+        print(f"请求角色列表出现问题：{resp['message']}")
         if resp.get('message') == '用户未登录':
-            日志.warning(f'用户登录可能失效了，请重新运行此程序！')
+            print(f'用户登录可能失效了，请重新运行此程序！')
             return []
     for i in resp['data']['list']:
-        if not i.get('appCode') == 'arknights': continue
+        if i.get('appCode') != 'arknights':
+            continue
         v.extend(i.get('bindingList'))
     return v
 
@@ -1724,9 +2036,10 @@ def 森空岛签到():
             登录凭证 = login_by_password()
         else:
             登录凭证 = 用户配置['登录凭证']
-        sign_token = get_cred_by_token(登录凭证)['token']
-        header['cred'] = get_cred_by_token(登录凭证)['cred']
-        characters = get_binding_list(sign_token)
+        http_local.token = get_cred_by_token(登录凭证)['token']
+        http_local.header = header.copy()
+        http_local.header['cred'] = get_cred_by_token(登录凭证)['cred']
+        characters = get_binding_list()
         for i in characters:
             body = {
                 'gameId': 1,
@@ -1734,7 +2047,7 @@ def 森空岛签到():
             }
             resp = requests.post("https://zonai.skland.com/api/v1/game/attendance",
                                  headers=get_sign_header("https://zonai.skland.com/api/v1/game/attendance",
-                                                         'post', body, header, sign_token), json=body).json()
+                                                         'post', body, http_local.header), json=body).json()
             if resp['code'] == 0:
                 已签到日期 = datetime.now().strftime('%Y年%m月%d日')
                 日志.warning(f'今天是{已签到日期}，{i.get("nickName")}({i.get("channelName")})在森空岛签到成功！')
@@ -1764,10 +2077,12 @@ def 森空岛获取信息():
             登录凭证 = login_by_password()
         else:
             登录凭证 = 用户配置['登录凭证']
+        http_local.token = get_cred_by_token(登录凭证)['token']
+        http_local.header = header.copy()
+        http_local.header['cred'] = get_cred_by_token(登录凭证)['cred']
         森空岛小秘书角色UID = str(用户配置.get('森空岛小秘书角色UID'))  # character['uid'] 是 str，把 森空岛小秘书角色UID 转成 str
-        sign_token = get_cred_by_token(登录凭证)['token']
-        header['cred'] = get_cred_by_token(登录凭证)['cred']
-        characters = get_binding_list(sign_token)
+        # header['cred'] = get_cred_by_token(登录凭证)['cred']
+        characters = get_binding_list()
         if any(character.get('uid') == 森空岛小秘书角色UID for character in characters):
             # 如果确实绑定了 用户配置['森空岛小秘书角色UID']这个角色，就使用这个账号
             uid = 森空岛小秘书角色UID
@@ -1776,7 +2091,7 @@ def 森空岛获取信息():
         else:
             return  # 如果没有角色，就不获取信息了
         url = f"https://zonai.skland.com/api/v1/game/player/info?uid={uid}"
-        headers = get_sign_header(url, 'get', None, header, sign_token)
+        headers = get_sign_header(url, 'get', None, http_local.header)
         内容 = requests.get(url, headers=headers).json()
         with open('森空岛数据.json', 'w', encoding='utf-8') as 保存:
             json.dump(内容, 保存)
@@ -2330,7 +2645,7 @@ for 序号, 贸易站 in enumerate(跑单位置表):
 按钮宽度 = 25
 运行信息滚动窗高分数 = 22
 运行信息滚动窗高系数 = 14
-if 窗口.winfo_screenheight() == 2160:
+if 窗口.winfo_screenheight() > 1500:
     按钮宽度 = 20
     运行信息滚动窗高分数 = 26
     运行信息滚动窗高系数 = 11
@@ -2425,7 +2740,7 @@ if 用户配置['邮件设置']['邮件提醒开关'] == '开': 邮件提醒开�
 if 用户配置['森空岛签到开关'] == '开': 森空岛签到开关输入.set(True)
 界面.Checkbutton(森空岛设置, bootstyle="round-toggle", text="森空岛签到", variable=森空岛签到开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, padx=10, pady=5, sticky=界面.W)
 森空岛小秘书开关输入 = 界面.BooleanVar(value=False)    ###
-if 用户配置['悬浮字幕开关'] == '开': 森空岛小秘书开关输入.set(True)
+if 用户配置['森空岛小秘书开关'] == '开': 森空岛小秘书开关输入.set(True)
 界面.Checkbutton(森空岛设置, bootstyle="round-toggle", text="森空岛小秘书", variable=森空岛小秘书开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
 界面.Label(森空岛设置, text="登录凭证", width=16).grid(row=2, column=0, padx=10, pady=5, sticky=界面.E)
 登录凭证输入 = 界面.Entry(森空岛设置, width=30, justify=LEFT, show="●")    ###
@@ -2460,7 +2775,7 @@ if 用户配置['任务结束后退出游戏'] == '是': 任务结束后退出�
 
 # 自动休息设置
 自动休息设置 = 界面.LabelFrame(滚动区域[1], text="自动休息设置", relief=界面.RIDGE, borderwidth=10)
-自动休息设置.grid(row=1, column=1, sticky=界面.W+E+N+S, padx=10, pady=10)
+自动休息设置.grid(row=1, column=1, sticky=界面.W+E+N, padx=10, pady=10)
 自动休息开关输入 = 界面.BooleanVar(value=False)    ###
 if 用户配置['自动休息'] == '开': 自动休息开关输入.set(True)
 界面.Checkbutton(自动休息设置, bootstyle="round-toggle", text="自动休息", variable=自动休息开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, columnspan=6, padx=10, pady=5, sticky=界面.W)
@@ -2475,57 +2790,57 @@ for 序号 in range(5):
     宿舍干员安排[序号].grid(row=2, column=序号+1, padx=5, pady=5, sticky=界面.W)
     宿舍干员安排[序号].insert(0, 用户配置['宿舍设置'][list(用户配置['宿舍设置'].keys())[0]][序号])
 
-# MAA作战设置
-MAA作战设置 = 界面.LabelFrame(滚动区域[1], text="MAA作战设置", relief=界面.RIDGE, borderwidth=10)
-MAA作战设置.grid(row=2, column=1, sticky=界面.W+E+N+S, padx=10, pady=10)
-MAA作战开关输入 = 界面.BooleanVar(value=False)    ###
-if 用户配置['MAA设置']['作战开关'] == '开': MAA作战开关输入.set(True)
-界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="MAA作战", variable=MAA作战开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
-界面.Label(MAA作战设置, text="MAA路径").grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
-MAA路径输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=40)    ###
-MAA路径输入.grid(row=1, column=1, padx=5, pady=5, sticky=界面.W)
-MAA路径输入.insert(0, 用户配置['MAA设置']['MAA路径'])
-界面.Label(MAA作战设置, text="MAA adb路径").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
-MAA_adb路径输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=40)    ###
-MAA_adb路径输入.grid(row=2, column=1, padx=5, pady=5, sticky=界面.W)
-MAA_adb路径输入.insert(0, 用户配置['MAA设置']['MAA_adb路径'])
-
-程序特点域 = 界面.Frame(滚动区域[2], relief=界面.RIDGE, borderwidth=0)
-集成战略开关输入 = 界面.BooleanVar(value=False)    ###
-if 用户配置['MAA设置']['集成战略'] == '开': 集成战略开关输入.set(True)
-界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="集成战略", variable=集成战略开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
-集成战略主题输入 = 界面.StringVar(value=用户配置['MAA设置']['集成战略主题'])  ###
-界面.Radiobutton(MAA作战设置, text='探索者的银凇止境', variable=集成战略主题输入, value='探索者的银凇止境').grid(row=3, column=1, padx=10, pady=5, sticky=界面.W)
-界面.Radiobutton(MAA作战设置, text='水月与深蓝之树', variable=集成战略主题输入, value='水月与深蓝之树').grid(row=4, column=1, padx=10, pady=5, sticky=界面.W)
-界面.Radiobutton(MAA作战设置, text='傀影与猩红孤钻', variable=集成战略主题输入, value='傀影与猩红孤钻').grid(row=5, column=1, padx=10, pady=5, sticky=界面.W)
-界面.Label(MAA作战设置, text="集成战略分队").grid(row=6, column=0, padx=10, pady=5, sticky=界面.W)
-集成战略分队输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
-集成战略分队输入.grid(row=6, column=1, padx=5, pady=5, sticky=界面.W)
-集成战略分队输入.insert(0, 用户配置['MAA设置']['集成战略分队'])
-界面.Label(MAA作战设置, text="集成战略开局招募组合").grid(row=7, column=0, padx=10, pady=5, sticky=界面.W)
-集成战略开局招募组合输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
-集成战略开局招募组合输入.grid(row=7, column=1, padx=5, pady=5, sticky=界面.W)
-集成战略开局招募组合输入.insert(0, 用户配置['MAA设置']['集成战略开局招募组合'])
-界面.Label(MAA作战设置, text="集成战略开局干员").grid(row=8, column=0, padx=10, pady=5, sticky=界面.W)
-集成战略开局干员输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
-集成战略开局干员输入.grid(row=8, column=1, padx=5, pady=5, sticky=界面.W)
-集成战略开局干员输入.insert(0, 用户配置['MAA设置']['集成战略开局干员'])
-界面.Label(MAA作战设置, text="集成战略策略模式").grid(row=9, column=0, padx=10, pady=5, sticky=界面.W)
-集成战略策略模式输入 = 界面.StringVar(value=用户配置['MAA设置']['集成战略策略模式'])  ###
-界面.Radiobutton(MAA作战设置, text='刷等级', variable=集成战略策略模式输入, value='0').grid(row=9, column=1, padx=10, pady=5, sticky=界面.W)
-界面.Radiobutton(MAA作战设置, text='刷源石锭', variable=集成战略策略模式输入, value='1').grid(row=10, column=1, padx=10, pady=5, sticky=界面.W)
-# 生息演算开关输入 = 界面.BooleanVar(value=False)    ###
-# if 用户配置['MAA设置']['生息演算'] == '开': 生息演算开关输入.set(True)
-# 界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="生息演算", variable=生息演算开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=15, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
-界面.Separator(MAA作战设置, bootstyle="light").grid(row=16, column=0, padx=20, pady=10, sticky=界面.W+E)
-界面.Label(MAA作战设置, text="消耗理智关卡").grid(row=17, column=0, padx=10, pady=5, sticky=界面.W)
-消耗理智关卡输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
-消耗理智关卡输入.grid(row=17, column=1, padx=5, pady=5, sticky=界面.W)
-消耗理智关卡输入.insert(0, 用户配置['MAA设置']['消耗理智关卡'])
-界面.Label(MAA作战设置, text="每次MAA使用理智药数量").grid(row=18, column=0, padx=10, pady=5, sticky=界面.W)
-每次MAA使用理智药数量输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
-每次MAA使用理智药数量输入.grid(row=18, column=1, padx=5, pady=5, sticky=界面.W)
-每次MAA使用理智药数量输入.insert(0, 用户配置['MAA设置']['使用理智药数量'])
+# # MAA作战设置
+# MAA作战设置 = 界面.LabelFrame(滚动区域[1], text="MAA作战设置", relief=界面.RIDGE, borderwidth=10)
+# MAA作战设置.grid(row=2, column=1, sticky=界面.W+E+N+S, padx=10, pady=10)
+# MAA作战开关输入 = 界面.BooleanVar(value=False)    ###
+# if 用户配置['MAA设置']['作战开关'] == '开': MAA作战开关输入.set(True)
+# 界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="MAA作战", variable=MAA作战开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=0, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
+# 界面.Label(MAA作战设置, text="MAA路径").grid(row=1, column=0, padx=10, pady=5, sticky=界面.W)
+# MAA路径输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=40)    ###
+# MAA路径输入.grid(row=1, column=1, padx=5, pady=5, sticky=界面.W)
+# MAA路径输入.insert(0, 用户配置['MAA设置']['MAA路径'])
+# 界面.Label(MAA作战设置, text="MAA adb路径").grid(row=2, column=0, padx=10, pady=5, sticky=界面.W)
+# MAA_adb路径输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=40)    ###
+# MAA_adb路径输入.grid(row=2, column=1, padx=5, pady=5, sticky=界面.W)
+# MAA_adb路径输入.insert(0, 用户配置['MAA设置']['MAA_adb路径'])
+#
+# 程序特点域 = 界面.Frame(滚动区域[2], relief=界面.RIDGE, borderwidth=0)
+# 集成战略开关输入 = 界面.BooleanVar(value=False)    ###
+# if 用户配置['MAA设置']['集成战略'] == '开': 集成战略开关输入.set(True)
+# 界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="集成战略", variable=集成战略开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
+# 集成战略主题输入 = 界面.StringVar(value=用户配置['MAA设置']['集成战略主题'])  ###
+# 界面.Radiobutton(MAA作战设置, text='探索者的银凇止境', variable=集成战略主题输入, value='探索者的银凇止境').grid(row=3, column=1, padx=10, pady=5, sticky=界面.W)
+# 界面.Radiobutton(MAA作战设置, text='水月与深蓝之树', variable=集成战略主题输入, value='水月与深蓝之树').grid(row=4, column=1, padx=10, pady=5, sticky=界面.W)
+# 界面.Radiobutton(MAA作战设置, text='傀影与猩红孤钻', variable=集成战略主题输入, value='傀影与猩红孤钻').grid(row=5, column=1, padx=10, pady=5, sticky=界面.W)
+# 界面.Label(MAA作战设置, text="集成战略分队").grid(row=6, column=0, padx=10, pady=5, sticky=界面.W)
+# 集成战略分队输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
+# 集成战略分队输入.grid(row=6, column=1, padx=5, pady=5, sticky=界面.W)
+# 集成战略分队输入.insert(0, 用户配置['MAA设置']['集成战略分队'])
+# 界面.Label(MAA作战设置, text="集成战略开局招募组合").grid(row=7, column=0, padx=10, pady=5, sticky=界面.W)
+# 集成战略开局招募组合输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
+# 集成战略开局招募组合输入.grid(row=7, column=1, padx=5, pady=5, sticky=界面.W)
+# 集成战略开局招募组合输入.insert(0, 用户配置['MAA设置']['集成战略开局招募组合'])
+# 界面.Label(MAA作战设置, text="集成战略开局干员").grid(row=8, column=0, padx=10, pady=5, sticky=界面.W)
+# 集成战略开局干员输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
+# 集成战略开局干员输入.grid(row=8, column=1, padx=5, pady=5, sticky=界面.W)
+# 集成战略开局干员输入.insert(0, 用户配置['MAA设置']['集成战略开局干员'])
+# 界面.Label(MAA作战设置, text="集成战略策略模式").grid(row=9, column=0, padx=10, pady=5, sticky=界面.W)
+# 集成战略策略模式输入 = 界面.StringVar(value=用户配置['MAA设置']['集成战略策略模式'])  ###
+# 界面.Radiobutton(MAA作战设置, text='刷等级', variable=集成战略策略模式输入, value='0').grid(row=9, column=1, padx=10, pady=5, sticky=界面.W)
+# 界面.Radiobutton(MAA作战设置, text='刷源石锭', variable=集成战略策略模式输入, value='1').grid(row=10, column=1, padx=10, pady=5, sticky=界面.W)
+# # 生息演算开关输入 = 界面.BooleanVar(value=False)    ###
+# # if 用户配置['MAA设置']['生息演算'] == '开': 生息演算开关输入.set(True)
+# # 界面.Checkbutton(MAA作战设置, bootstyle="round-toggle", text="生息演算", variable=生息演算开关输入, onvalue=TRUE, offvalue=FALSE).grid(row=15, column=0, columnspan=2, padx=10, pady=5, sticky=界面.W)
+# 界面.Separator(MAA作战设置, bootstyle="light").grid(row=16, column=0, padx=20, pady=10, sticky=界面.W+E)
+# 界面.Label(MAA作战设置, text="消耗理智关卡").grid(row=17, column=0, padx=10, pady=5, sticky=界面.W)
+# 消耗理智关卡输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
+# 消耗理智关卡输入.grid(row=17, column=1, padx=5, pady=5, sticky=界面.W)
+# 消耗理智关卡输入.insert(0, 用户配置['MAA设置']['消耗理智关卡'])
+# 界面.Label(MAA作战设置, text="每次MAA使用理智药数量").grid(row=18, column=0, padx=10, pady=5, sticky=界面.W)
+# 每次MAA使用理智药数量输入 = 界面.Entry(MAA作战设置, justify=LEFT, width=15)    ###
+# 每次MAA使用理智药数量输入.grid(row=18, column=1, padx=5, pady=5, sticky=界面.W)
+# 每次MAA使用理智药数量输入.insert(0, 用户配置['MAA设置']['使用理智药数量'])
 
 # 使用说明
 程序特点 = """欢迎博士使用Mower0！
@@ -2540,7 +2855,7 @@ if 用户配置['MAA设置']['集成战略'] == '开': 集成战略开关输入.
     对MAA过渡玩家也可以兼容使用MAA排班，但可能面临程序间争夺adb的情况，需要交替手动启动和关闭。
 3. 支持一系列森空岛相关功能，如自动签到、游戏数据查看、干员阵容消耗经验龙门币分析功能。
     能够输出一个.csv文件记录干员阵容、练度和消耗经验龙门币供更加深入的分析。
-4. 谨防集批悲剧（风雪蔽目.jpg）！可选用通知中心的弹窗提示和桌面悬浮任务提示字幕（类似音乐软件的桌面歌词）。
+4. 谨防集批悲剧！可选用通知中心的弹窗提示和桌面悬浮任务提示字幕（类似音乐软件的桌面歌词）。
     悬浮字幕可以把鼠标放在字上，通过滚轮轻松调节字幕大小，双击字幕可以关闭，关闭后也可以在托盘图标处再次打开。
     眼看作战没有结束，任务又马上要开始的情况也可以在托盘处暂时先停止Mower0。
     双击Mower0的托盘图标会通过弹窗通知查看当前跑单任务信息。"""
@@ -2588,9 +2903,9 @@ for 行号, 行 in enumerate(使用流程行列表): 界面.Label(使用流程�
 同时在Mower0文件夹中生成一个森空岛干员阵容查询.csv文件，供后续拓展研究。
 ● 保存配置
 当你在程序窗口中对设置进行了更改，保存配置可以让程序下一次按照新的设置来运行。
-● 停止运行
+● 停止运行（快捷键为 Alt+T）
 中止Mower0在游戏中的所有任务。
-● 开始运行
+● 开始运行（快捷键为 Alt+K）
 该按钮的功能是按顺序依次执行：
 1.首先自动进行一次保存配置。
 2.如果Mower0正在运行中，那么停止运行。
@@ -2647,19 +2962,21 @@ Mower0运行期间各类截图的存储数量上限，当存储数量到达该�
 干员休息的目标宿舍门牌号，形式如“B101”，在游戏中进入该贸易站后画面的上方查询具体门牌号，请确保跟游戏中的贸易站一致。
 ♦ 干员安排
 每个位置都可以填写指定干员的代号，如“但书”、“龙舌兰”、“菲亚梅塔”等，会按照所填干员在对应位置换上休息，也可以填写“当前休息干员”，保持该位置干员不变。
-● MAA作战设置
-开启后，Mower0在跑单之余会调用MAA进行作战，当跑单任务临近，Mower0会优先处理跑单任务。
-♦ MAA路径
-填写MAA.exe所在的位置路径，如“D:/MAA”
-♦ MAA adb路径
-填写MAA设置中自动识别出来的adb路径
-♦ 集成战略
-开启后，会在跑单间隔优先进行集成战略作战，可以指定集成战略主题、分队、开局组合、开局干员、策略模式
-♦ 消耗理智关卡
-当“MAA作战”选项开启，而“集成战略”选项关闭时，会在跑单间隔对目标消耗理智关卡持续进行反复作战，直到理智不足为止。
-♦ 每次MAA使用理智药数量
-在每次调用MAA过程中，由于理智不足时会使用的理智药上限。注意在新的跑单间隔中重新调用MAA会重新计算所使用的理智药。
 """
+# """
+# ● MAA作战设置
+# 开启后，Mower0在跑单之余会调用MAA进行作战，当跑单任务临近，Mower0会优先处理跑单任务。
+# ♦ MAA路径
+# 填写MAA.exe所在的位置路径，如“D:/MAA”
+# ♦ MAA adb路径
+# 填写MAA设置中自动识别出来的adb路径
+# ♦ 集成战略
+# 开启后，会在跑单间隔优先进行集成战略作战，可以指定集成战略主题、分队、开局组合、开局干员、策略模式
+# ♦ 消耗理智关卡
+# 当“MAA作战”选项开启，而“集成战略”选项关闭时，会在跑单间隔对目标消耗理智关卡持续进行反复作战，直到理智不足为止。
+# ♦ 每次MAA使用理智药数量
+# 在每次调用MAA过程中，由于理智不足时会使用的理智药上限。注意在新的跑单间隔中重新调用MAA会重新计算所使用的理智药。
+# """
 详细说明行列表 = 详细说明.split('\n')
 for 行号, 行 in enumerate(详细说明行列表):
     if len(行) == 0: continue
