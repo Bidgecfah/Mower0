@@ -77,10 +77,10 @@ class 干员排序方式(Enum):
 
 
 干员排序方式位置 = {
-    干员排序方式.工作状态: (7 / 10, 3 / 50),
-    干员排序方式.技能: (3 / 4, 3 / 50),
-    干员排序方式.心情: (4 / 5, 3 / 50),
-    干员排序方式.信赖值: (2050 / 2496, 3 / 50),
+    干员排序方式.工作状态: (3 / 5, 3 / 50),
+    干员排序方式.技能: (2 / 3, 3 / 50),
+    干员排序方式.心情: (7 / 10, 3 / 50),
+    干员排序方式.信赖值: (4 / 5, 3 / 50),
 }
 
 BASIC_FORMAT = '%(asctime)s - %(levelname)s - %(relativepath)s:%(lineno)d - %(funcName)s - %(message)s'
@@ -245,7 +245,9 @@ class 项目经理(BaseSolver):
             if Mower0线程.stopped(): return
             if self.find('nav_button') is not None: self.tap((self.recog.w // 15, self.recog.h // 20))
             elif self.get_infra_scene() == 9998: time.sleep(3)
-            else: self.back_to_infrastructure()
+            else:
+                self.back_to_infrastructure()
+                time.sleep(3)
             self.recog.update()
             返回次数 += 1
 
@@ -272,7 +274,9 @@ class 项目经理(BaseSolver):
         elif self.scene() == 205: self.back()
         elif self.scene() == 9998: time.sleep(1)
         elif self.scene() == 9: time.sleep(1)
-        elif self.get_navigation(): self.tap_element('nav_infrastructure')
+        elif self.get_navigation():
+            self.tap_element('nav_infrastructure')
+            time.sleep(2)
         elif self.scene() == 207: self.tap_element('arrange_blue_yes')
         elif self.get_infra_scene() == -1 or not self.scene() == -1:
             self.back_to_index()
@@ -730,7 +734,7 @@ class 项目经理(BaseSolver):
                 右移次数 = 0
                 最大连续滑动次数 = 50
                 重试计数 += 1
-                self.筛选器(False)
+                # self.筛选器(False)
             if 刚进入干员选择界面:
                 self.tap((self.recog.w * 19 // 50, self.recog.h * 19 // 20), interval=0.5)
                 当前选中干员列表, 屏幕中识别到的干员 = self.查找干员(当前换上干员列表)
